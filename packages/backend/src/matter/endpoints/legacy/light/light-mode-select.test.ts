@@ -114,6 +114,25 @@ describe("light with mapped ModeSelect", () => {
     );
     await aggregator.add(endpoint);
 
+    const deviceTypes = (
+      endpoint.state.descriptor as {
+        readonly deviceTypeList: readonly {
+          readonly deviceType: number;
+          readonly revision: number;
+        }[];
+      }
+    ).deviceTypeList;
+    expect(
+      deviceTypes.map(({ deviceType, revision }) => [
+        Number(deviceType),
+        revision,
+      ]),
+    ).toEqual([
+      [0x0101, 3],
+      [0x0027, 1],
+      [0x0013, 3],
+    ]);
+
     const modeState = endpoint.state.modeSelect as {
       description: string;
       supportedModes: { label: string }[];

@@ -3,6 +3,8 @@ import {
   LightDeviceColorMode,
 } from "@home-assistant-matter-hub/common";
 import type { EndpointType } from "@matter/main";
+import { DescriptorServer } from "@matter/main/behaviors";
+import { DeviceTypeId } from "@matter/types";
 import { EntityStateProvider } from "../../../../services/bridges/entity-state-provider.js";
 import { HaElectricalEnergyMeasurementServer } from "../../../behaviors/electrical-energy-measurement-server.js";
 import { HaElectricalPowerMeasurementServer } from "../../../behaviors/electrical-power-measurement-server.js";
@@ -54,6 +56,11 @@ const LightModeSelectServer = ModeSelectServer({
       ?.modeSelectEntity,
   }),
 });
+
+const modeSelectDeviceType = {
+  deviceType: DeviceTypeId(0x0027),
+  revision: 1,
+};
 
 export function LightDevice(
   homeAssistantEntity: HomeAssistantEntityBehavior.State,
@@ -121,18 +128,40 @@ export function LightDevice(
 
   const modeSelectOptions =
     homeAssistantEntity.mapping?.modeSelectOptions?.filter(Boolean) ?? [];
+  let modeSelectDeviceTypes:
+    | { deviceType: DeviceTypeId; revision: number }[]
+    | undefined;
+  let modeSelectState:
+    | {
+        description: string;
+        supportedModes: ReturnType<typeof buildSupportedModes>;
+        currentMode: number;
+      }
+    | undefined;
   if (
     homeAssistantEntity.mapping?.modeSelectEntity &&
     modeSelectOptions.length > 0
   ) {
-    device = device.with(LightModeSelectServer).set({
-      modeSelect: {
-        description: homeAssistantEntity.mapping.modeSelectName ?? "Stufe",
-        supportedModes: buildSupportedModes(modeSelectOptions),
-        currentMode: 0,
+    modeSelectDeviceTypes = [
+      {
+        deviceType: deviceType.deviceType,
+        revision: deviceType.deviceRevision,
       },
-    });
+      modeSelectDeviceType,
+    ];
+    device = device.with(DescriptorServer, LightModeSelectServer);
+    modeSelectState = {
+      description: homeAssistantEntity.mapping.modeSelectName ?? "Stufe",
+      supportedModes: buildSupportedModes(modeSelectOptions),
+      currentMode: 0,
+    };
   }
 
-  return device.set({ homeAssistantEntity });
+  return device.set({
+    homeAssistantEntity,
+    ...(modeSelectState ? { modeSelect: modeSelectState } : {}),
+    ...(modeSelectDeviceTypes
+      ? { descriptor: { deviceTypeList: modeSelectDeviceTypes } }
+      : {}),
+  });
 }
