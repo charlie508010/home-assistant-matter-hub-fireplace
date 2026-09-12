@@ -1,5 +1,6 @@
 import type { HomeAssistantEntityInformation } from "@home-assistant-matter-hub/common";
 import { Logger } from "@matter/general";
+import type { Agent } from "@matter/main";
 import { ModeSelectServer as Base } from "@matter/main/behaviors";
 import type { HomeAssistantAction } from "../../services/home-assistant/home-assistant-actions.js";
 import { applyPatchState } from "../../utils/apply-patch-state.js";
@@ -16,11 +17,15 @@ export function buildSupportedModes(options: string[]) {
 }
 
 export interface SelectModeConfig {
-  getOptions: (entity: HomeAssistantEntityInformation) => string[];
+  getOptions: (
+    entity: HomeAssistantEntityInformation,
+    agent: Agent,
+  ) => string[];
   getCurrentOption: (
     entity: HomeAssistantEntityInformation,
+    agent: Agent,
   ) => string | undefined;
-  selectOption: (option: string) => HomeAssistantAction;
+  selectOption: (option: string, agent: Agent) => HomeAssistantAction;
 }
 
 // biome-ignore lint/correctness/noUnusedVariables: Used by the factory function below
@@ -39,8 +44,8 @@ class ModeSelectServerBase extends Base {
       return;
     }
     const config = this.state.config;
-    const options = config.getOptions(entity);
-    const current = config.getCurrentOption(entity);
+    const options = config.getOptions(entity, this.agent);
+    const current = config.getCurrentOption(entity, this.agent);
 
     if (options.length === 0) {
       return;
@@ -59,7 +64,7 @@ class ModeSelectServerBase extends Base {
   override changeToMode(request: { newMode: number }) {
     const homeAssistant = this.agent.get(HomeAssistantEntityBehavior);
     const config = this.state.config;
-    const options = config.getOptions(homeAssistant.entity);
+    const options = config.getOptions(homeAssistant.entity, this.agent);
     const { newMode } = request;
 
     if (newMode < 0 || newMode >= options.length) {
@@ -75,7 +80,7 @@ class ModeSelectServerBase extends Base {
     );
 
     applyPatchState(this.state, { currentMode: newMode });
-    homeAssistant.callAction(config.selectOption(option));
+    homeAssistant.callAction(config.selectOption(option, this.agent));
   }
 }
 

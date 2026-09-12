@@ -205,6 +205,15 @@ export interface EntityMappingConfig {
    * Example: "sensor.smart_plug_power"
    */
   readonly powerEntity?: string;
+  /** Select entity exposed as a named Matter ModeSelect cluster on a light. */
+  readonly modeSelectEntity?: string;
+  /** Name reported for the light's additional ModeSelect cluster. */
+  readonly modeSelectName?: string;
+  /**
+   * Ordered options reported by Matter and written verbatim to the HA select.
+   * Example: ["Stufe 0", "Stufe 1", "Stufe 2", "Stufe 3", "Stufe 4", "Stufe 5"]
+   */
+  readonly modeSelectOptions?: string[];
   /**
    * Optional: Entity ID of an energy sensor (device_class: energy, unit: kWh).
    * Adds ElectricalEnergyMeasurement cluster to show cumulative energy consumption.
@@ -498,6 +507,9 @@ export interface EntityMappingRequest {
   readonly lockPinMinLength?: number;
   readonly lockPinMaxLength?: number;
   readonly powerEntity?: string;
+  readonly modeSelectEntity?: string;
+  readonly modeSelectName?: string;
+  readonly modeSelectOptions?: string[];
   readonly energyEntity?: string;
   readonly meterSerialNumber?: string;
   readonly pointOfDelivery?: string;

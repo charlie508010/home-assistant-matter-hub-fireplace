@@ -61,6 +61,7 @@ export function getMappedEntityIds(mapping?: EntityMappingConfig): string[] {
   if (mapping.mopIntensityEntity) ids.push(mapping.mopIntensityEntity);
   if (mapping.filterLifeEntity) ids.push(mapping.filterLifeEntity);
   if (mapping.powerEntity) ids.push(mapping.powerEntity);
+  if (mapping.modeSelectEntity) ids.push(mapping.modeSelectEntity);
   if (mapping.energyEntity) ids.push(mapping.energyEntity);
   if (mapping.voltageEntity) ids.push(mapping.voltageEntity);
   if (mapping.currentEntity) ids.push(mapping.currentEntity);

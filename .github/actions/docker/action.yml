@@ -27,7 +27,7 @@ runs:
       id: meta
       shell: bash
       env:
-        DOCKER_IMAGE_BASENAME: ghcr.io/riddix/home-assistant-matter-hub
+        DOCKER_IMAGE_BASENAME: ghcr.io/charlie508010/home-assistant-matter-hub-fireplace
       run: |
         CONTEXT=$(dirname "${{inputs.dockerfile}}")
         DOCKER_TYPE=$(basename "${{inputs.dockerfile}}" .Dockerfile)

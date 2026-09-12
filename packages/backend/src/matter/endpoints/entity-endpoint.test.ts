@@ -11,6 +11,13 @@ describe("getMappedEntityIds (#368)", () => {
     } as EntityMappingConfig);
     expect(ids).toContain("sensor.vacuum_cleaned_area");
   });
+
+  it("includes a light mode select so its changes wake the light endpoint", () => {
+    const ids = getMappedEntityIds({
+      modeSelectEntity: "select.kamin_matter_flammenfarbe",
+    } as EntityMappingConfig);
+    expect(ids).toContain("select.kamin_matter_flammenfarbe");
+  });
 });
 
 describe("createEndpointId (#366)", () => {

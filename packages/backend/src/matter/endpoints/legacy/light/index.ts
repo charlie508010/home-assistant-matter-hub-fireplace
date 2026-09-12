@@ -3,9 +3,14 @@ import {
   LightDeviceColorMode,
 } from "@home-assistant-matter-hub/common";
 import type { EndpointType } from "@matter/main";
+import { EntityStateProvider } from "../../../../services/bridges/entity-state-provider.js";
 import { HaElectricalEnergyMeasurementServer } from "../../../behaviors/electrical-energy-measurement-server.js";
 import { HaElectricalPowerMeasurementServer } from "../../../behaviors/electrical-power-measurement-server.js";
-import type { HomeAssistantEntityBehavior } from "../../../behaviors/home-assistant-entity-behavior.js";
+import { HomeAssistantEntityBehavior } from "../../../behaviors/home-assistant-entity-behavior.js";
+import {
+  buildSupportedModes,
+  ModeSelectServer,
+} from "../../../behaviors/mode-select-server.js";
 import { HaPowerTopologyServer } from "../../../behaviors/power-topology-server.js";
 import {
   DimmableLightType,
@@ -30,6 +35,25 @@ const colorModes: LightDeviceColorMode[] = [
   LightDeviceColorMode.RGBW,
   LightDeviceColorMode.RGBWW,
 ];
+
+const LightModeSelectServer = ModeSelectServer({
+  getOptions: (_, agent) =>
+    agent.get(HomeAssistantEntityBehavior).state.mapping?.modeSelectOptions ??
+    [],
+  getCurrentOption: (_, agent) => {
+    const entityId = agent.get(HomeAssistantEntityBehavior).state.mapping
+      ?.modeSelectEntity;
+    return entityId
+      ? agent.env.get(EntityStateProvider).getState(entityId)?.state
+      : undefined;
+  },
+  selectOption: (option, agent) => ({
+    action: "select.select_option",
+    data: { option },
+    target: agent.get(HomeAssistantEntityBehavior).state.mapping
+      ?.modeSelectEntity,
+  }),
+});
 
 export function LightDevice(
   homeAssistantEntity: HomeAssistantEntityBehavior.State,
@@ -93,6 +117,21 @@ export function LightDevice(
   }
   if (hasEnergyEntity) {
     device = device.with(HaElectricalEnergyMeasurementServer);
+  }
+
+  const modeSelectOptions =
+    homeAssistantEntity.mapping?.modeSelectOptions?.filter(Boolean) ?? [];
+  if (
+    homeAssistantEntity.mapping?.modeSelectEntity &&
+    modeSelectOptions.length > 0
+  ) {
+    device = device.with(LightModeSelectServer).set({
+      modeSelect: {
+        description: homeAssistantEntity.mapping.modeSelectName ?? "Stufe",
+        supportedModes: buildSupportedModes(modeSelectOptions),
+        currentMode: 0,
+      },
+    });
   }
 
   return device.set({ homeAssistantEntity });

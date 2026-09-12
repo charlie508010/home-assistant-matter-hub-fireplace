@@ -153,6 +153,12 @@ export class EntityMappingStorage extends Service {
       entityId: request.entityId,
       matterDeviceType: request.matterDeviceType,
       customName: request.customName?.trim() || undefined,
+      modeSelectEntity: request.modeSelectEntity?.trim() || undefined,
+      modeSelectName: request.modeSelectName?.trim() || undefined,
+      modeSelectOptions:
+        request.modeSelectOptions
+          ?.map((option) => option.trim())
+          .filter(Boolean) || undefined,
       customProductName: request.customProductName?.trim() || undefined,
       customVendorName: request.customVendorName?.trim() || undefined,
       customSerialNumber: request.customSerialNumber?.trim() || undefined,
@@ -231,6 +237,9 @@ export class EntityMappingStorage extends Service {
     if (
       !config.matterDeviceType &&
       !config.customName &&
+      !config.modeSelectEntity &&
+      !config.modeSelectName &&
+      (!config.modeSelectOptions || config.modeSelectOptions.length === 0) &&
       !config.customProductName &&
       !config.customVendorName &&
       !config.customSerialNumber &&

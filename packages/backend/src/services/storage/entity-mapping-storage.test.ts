@@ -96,6 +96,27 @@ describe("EntityMappingStorage orphan tombstone", () => {
     expect(loaded?.vacuumRoomSwitches).toBe(true);
   });
 
+  it("persists and normalizes a mapped ModeSelect on a light", async () => {
+    const storage = new EntityMappingStorage(appStorage);
+    await storage.construction;
+    await storage.setMapping({
+      bridgeId: "b",
+      entityId: "light.kamin",
+      modeSelectEntity: " select.kamin_matter_flammenfarbe ",
+      modeSelectName: " Flammenfarbe ",
+      modeSelectOptions: [" Stufe 0 ", "", "Stufe 1"],
+    });
+
+    await storage.flush();
+    const reloaded = new EntityMappingStorage(appStorage);
+    await reloaded.construction;
+    expect(reloaded.getMapping("b", "light.kamin")).toMatchObject({
+      modeSelectEntity: "select.kamin_matter_flammenfarbe",
+      modeSelectName: "Flammenfarbe",
+      modeSelectOptions: ["Stufe 0", "Stufe 1"],
+    });
+  });
+
   // #443: the new per-entity fan debounce field must survive the storage
   // normalizer and a flushed reload like every other mapping field.
   it("persists fanSliderDebounceMs and round-trips it through a reload", async () => {
