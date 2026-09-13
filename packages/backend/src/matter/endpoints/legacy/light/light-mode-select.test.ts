@@ -128,9 +128,10 @@ describe("light with mapped ModeSelect", () => {
         revision,
       ]),
     ).toEqual([
-      [0x0101, 3],
+      [0x0100, 3],
       [0x0013, 3],
     ]);
+    expect(endpoint.state.levelControl).toBeUndefined();
 
     const modeState = endpoint.state.modeSelect as {
       description: string;

@@ -79,13 +79,24 @@ export function LightDevice(
     attributes.battery_level != null || attributes.battery != null;
   const hasBatteryEntity = !!homeAssistantEntity.mapping?.batteryEntity;
   const hasBattery = hasBatteryAttr || hasBatteryEntity;
+  const modeSelectOptions =
+    homeAssistantEntity.mapping?.modeSelectOptions?.filter(Boolean) ?? [];
+  const hasModeSelect =
+    !!homeAssistantEntity.mapping?.modeSelectEntity &&
+    modeSelectOptions.length > 0;
 
   // Use ExtendedColorLight for all color-capable lights, including ColorTemperature-only lights.
   // ColorTemperatureLightDevice has issues with Matter.js initialization that cause
   // "Behaviors have errors" during endpoint creation. ExtendedColorLight works correctly
   // with just the ColorTemperature feature enabled (supportsColorControl=false).
-  const deviceType =
-    supportsColorControl || supportsColorTemperature
+  // A mapped ModeSelect represents a staged appliance rather than a dimmable
+  // lamp. Keep it on a lamp device type for Alexa's Matter ModeSelect support,
+  // but omit LevelControl so Alexa cannot mistake "Stufe" for brightness.
+  const deviceType = hasModeSelect
+    ? hasBattery
+      ? OnOffLightWithBatteryType
+      : OnOffLightType
+    : supportsColorControl || supportsColorTemperature
       ? ExtendedColorLightType(
           supportsColorControl,
           supportsColorTemperature,
@@ -119,18 +130,13 @@ export function LightDevice(
     device = device.with(HaElectricalEnergyMeasurementServer);
   }
 
-  const modeSelectOptions =
-    homeAssistantEntity.mapping?.modeSelectOptions?.filter(Boolean) ?? [];
-  if (
-    homeAssistantEntity.mapping?.modeSelectEntity &&
-    modeSelectOptions.length > 0
-  ) {
+  if (hasModeSelect) {
     // Alexa recognizes ModeSelect on a lamp endpoint, but rejects the
     // standalone ModeSelect device type (0x0027). Keep the light's descriptor
     // unchanged and add only the optional cluster behavior.
     device = device.with(LightModeSelectServer).set({
       modeSelect: {
-        description: homeAssistantEntity.mapping.modeSelectName ?? "Stufe",
+        description: homeAssistantEntity.mapping?.modeSelectName ?? "Stufe",
         supportedModes: buildSupportedModes(modeSelectOptions),
         currentMode: 0,
       },
