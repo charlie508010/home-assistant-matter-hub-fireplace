@@ -3,6 +3,8 @@ import {
   LightDeviceColorMode,
 } from "@home-assistant-matter-hub/common";
 import type { EndpointType } from "@matter/main";
+import { DescriptorServer } from "@matter/main/behaviors";
+import { DeviceTypeId } from "@matter/main/types";
 import { EntityStateProvider } from "../../../../services/bridges/entity-state-provider.js";
 import { HaElectricalEnergyMeasurementServer } from "../../../behaviors/electrical-energy-measurement-server.js";
 import { HaElectricalPowerMeasurementServer } from "../../../behaviors/electrical-power-measurement-server.js";
@@ -54,6 +56,11 @@ const LightModeSelectServer = ModeSelectServer({
       ?.modeSelectEntity,
   }),
 });
+
+const modeSelectDeviceType = {
+  deviceType: DeviceTypeId(0x0027),
+  revision: 1,
+};
 
 export function LightDevice(
   homeAssistantEntity: HomeAssistantEntityBehavior.State,
@@ -131,10 +138,20 @@ export function LightDevice(
   }
 
   if (hasModeSelect) {
-    // Alexa recognizes ModeSelect on a lamp endpoint, but rejects the
-    // standalone ModeSelect device type (0x0027). Keep the light's descriptor
-    // unchanged and add only the optional cluster behavior.
-    device = device.with(LightModeSelectServer).set({
+    // Alexa maps a lamp's Mode Select cluster to Alexa.ModeController. Declare
+    // both device types so every server cluster belongs to a device type:
+    // On/Off Light owns OnOff and Mode Select owns ModeSelect. Advertising the
+    // cluster on a light-only descriptor is non-conformant and Alexa drops it.
+    device = device.with(DescriptorServer, LightModeSelectServer).set({
+      descriptor: {
+        deviceTypeList: [
+          {
+            deviceType: deviceType.deviceType,
+            revision: deviceType.deviceRevision,
+          },
+          modeSelectDeviceType,
+        ],
+      },
       modeSelect: {
         description: homeAssistantEntity.mapping?.modeSelectName ?? "Stufe",
         supportedModes: buildSupportedModes(modeSelectOptions),

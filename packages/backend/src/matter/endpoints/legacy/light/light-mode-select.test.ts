@@ -129,6 +129,7 @@ describe("light with mapped ModeSelect", () => {
       ]),
     ).toEqual([
       [0x0100, 3],
+      [0x0027, 1],
       [0x0013, 3],
     ]);
     expect(endpoint.state.levelControl).toBeUndefined();
