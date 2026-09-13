@@ -11,8 +11,18 @@ permissions:
 
 jobs:
   build-and-publish:
-    name: Test and publish Fireplace add-on image
-    runs-on: ubuntu-latest
+    name: Test and publish Fireplace add-on image (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
@@ -54,9 +64,44 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and publish add-on image
-        uses: ./.github/actions/docker
+        uses: docker/build-push-action@v7
         with:
           push: true
-          channel: fireplace-alpha
-          dockerfile: apps/home-assistant-matter-hub/addon.Dockerfile
-          package-version: 2.1.0-alpha.903
+          platforms: ${{ matrix.platform }}
+          context: apps/home-assistant-matter-hub
+          file: apps/home-assistant-matter-hub/addon.Dockerfile
+          build-args: |
+            NODE_VERSION=22
+            PACKAGE_VERSION=2.1.0-alpha.903
+          tags: |
+            ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:2.1.0-alpha.903-${{ matrix.arch }}
+            ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:fireplace-alpha-${{ matrix.arch }}
+
+  publish-manifest:
+    name: Publish Fireplace multi-architecture manifest
+    needs: build-and-publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish manifests
+        run: |
+          docker buildx imagetools create \
+            --tag ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:2.1.0-alpha.903 \
+            --tag ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:fireplace-alpha \
+            ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:2.1.0-alpha.903-amd64 \
+            ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:2.1.0-alpha.903-arm64
+
+      - name: Verify manifest
+        run: docker buildx imagetools inspect ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:2.1.0-alpha.903
