@@ -129,7 +129,6 @@ describe("light with mapped ModeSelect", () => {
       ]),
     ).toEqual([
       [0x0101, 3],
-      [0x0027, 1],
       [0x0013, 3],
     ]);
 
