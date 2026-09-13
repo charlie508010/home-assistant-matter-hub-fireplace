@@ -25,6 +25,14 @@ export interface SelectModeConfig {
     entity: HomeAssistantEntityInformation,
     agent: Agent,
   ) => string | undefined;
+  /**
+   * Optional controller-facing labels. The position must match getOptions();
+   * getOptions() remains the HA value used for state matching and commands.
+   */
+  getLabels?: (
+    entity: HomeAssistantEntityInformation,
+    agent: Agent,
+  ) => string[];
   selectOption: (option: string, agent: Agent) => HomeAssistantAction;
 }
 
@@ -45,6 +53,9 @@ class ModeSelectServerBase extends Base {
     }
     const config = this.state.config;
     const options = config.getOptions(entity, this.agent);
+    const configuredLabels = config.getLabels?.(entity, this.agent);
+    const labels =
+      configuredLabels?.length === options.length ? configuredLabels : options;
     const current = config.getCurrentOption(entity, this.agent);
 
     if (options.length === 0) {
@@ -56,7 +67,7 @@ class ModeSelectServerBase extends Base {
       : -1;
 
     applyPatchState(this.state, {
-      supportedModes: buildSupportedModes(options),
+      supportedModes: buildSupportedModes(labels),
       currentMode: currentIndex >= 0 ? currentIndex : 0,
     });
   }

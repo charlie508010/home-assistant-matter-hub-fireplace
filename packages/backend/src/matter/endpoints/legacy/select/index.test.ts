@@ -112,6 +112,64 @@ describe("SelectDevice / InputSelectDevice ModeSelect labels (#296)", () => {
     expect(supportedModes[1].label).toBe("a".repeat(64));
   });
 
+  it("uses custom labels while keeping the raw HA options for commands", () => {
+    const rawOptions = ["C0", "C1", "C2", "C3", "C4", "C5"];
+    const labels = [
+      "Stufe 0",
+      "Stufe 1",
+      "Stufe 2",
+      "Stufe 3",
+      "Stufe 4",
+      "Stufe 5",
+    ];
+    const entity = createEntity("select.kamin_flammenfarbe", "C4", {
+      friendly_name: "Flammenfarbe",
+      options: rawOptions,
+    });
+
+    const endpointType = SelectDevice({
+      entity,
+      customName: "Flammenfarbe",
+      mapping: {
+        entityId: "select.kamin_flammenfarbe",
+        matterDeviceType: "mode_select",
+        modeSelectOptions: labels,
+      },
+    } as never);
+    expect(endpointType).toBeDefined();
+
+    const { description, currentMode, supportedModes } = readSupportedModes(
+      endpointType!,
+    );
+    expect(description).toBe("Flammenfarbe");
+    expect(currentMode).toBe(4);
+    expect(supportedModes.map((mode) => mode.label)).toEqual(labels);
+
+    // biome-ignore lint/suspicious/noExplicitAny: inspect behavior config
+    const behaviors = (endpointType as any).behaviors as Record<string, any>;
+    const config = behaviors.modeSelect.defaults.config as {
+      getOptions: (entity: HomeAssistantEntityInformation) => string[];
+      getLabels: (
+        entity: HomeAssistantEntityInformation,
+        agent: unknown,
+      ) => string[];
+      selectOption: (option: string) => { action: string; data: unknown };
+    };
+    const agent = {
+      get: () => ({
+        state: {
+          mapping: { modeSelectOptions: labels },
+        },
+      }),
+    };
+    expect(config.getOptions(entity)).toEqual(rawOptions);
+    expect(config.getLabels(entity, agent)).toEqual(labels);
+    expect(config.selectOption(config.getOptions(entity)[5])).toEqual({
+      action: "select.select_option",
+      data: { option: "C5" },
+    });
+  });
+
   it("returns undefined when options are missing", () => {
     const entity = createEntity("input_select.empty", "unknown", {});
     expect(InputSelectDevice({ entity } as never)).toBeUndefined();

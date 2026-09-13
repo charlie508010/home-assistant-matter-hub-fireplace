@@ -32,13 +32,13 @@ jobs:
         run: pnpm run test
 
       - name: Set Fireplace Alpha version
-        run: pnpm run release:version 2.1.0-alpha.901
+        run: pnpm run release:version 2.1.0-alpha.902
 
       - name: Build
         run: pnpm run build
         env:
           BASE_URL: /home-assistant-matter-hub
-          APP_VERSION: 2.1.0-alpha.901
+          APP_VERSION: 2.1.0-alpha.902
 
       - name: Package
         run: pnpm run release:pack
@@ -59,4 +59,4 @@ jobs:
           push: true
           channel: fireplace-alpha
           dockerfile: apps/home-assistant-matter-hub/addon.Dockerfile
-          package-version: 2.1.0-alpha.901
+          package-version: 2.1.0-alpha.902

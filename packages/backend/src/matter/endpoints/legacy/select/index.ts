@@ -23,6 +23,12 @@ function getSelectOptions(entity: HomeAssistantEntityInformation): string[] {
 function buildSelectModeServer(action: string) {
   return ModeSelectServer({
     getOptions: getSelectOptions,
+    getLabels: (entity, agent) => {
+      const options = getSelectOptions(entity);
+      const labels = agent.get(HomeAssistantEntityBehavior).state.mapping
+        ?.modeSelectOptions;
+      return labels?.length === options.length ? labels : options;
+    },
     getCurrentOption: (entity) => entity.state.state ?? undefined,
     selectOption: (option) => ({
       action,
@@ -121,6 +127,9 @@ export function SelectDevice(
     ? options.findIndex((o) => o.toLowerCase() === currentOption.toLowerCase())
     : 0;
 
+  const labels = homeAssistantEntity.mapping?.modeSelectOptions;
+  const displayOptions = labels?.length === options.length ? labels : options;
+
   return SelectEndpointType.set({
     homeAssistantEntity,
     modeSelect: {
@@ -132,7 +141,7 @@ export function SelectDevice(
           }
         ).friendly_name ??
         "Select",
-      supportedModes: buildSupportedModes(options),
+      supportedModes: buildSupportedModes(displayOptions),
       currentMode: currentIndex >= 0 ? currentIndex : 0,
     },
   });
@@ -157,6 +166,9 @@ export function InputSelectDevice(
     ? options.findIndex((o) => o.toLowerCase() === currentOption.toLowerCase())
     : 0;
 
+  const labels = homeAssistantEntity.mapping?.modeSelectOptions;
+  const displayOptions = labels?.length === options.length ? labels : options;
+
   return InputSelectEndpointType.set({
     homeAssistantEntity,
     modeSelect: {
@@ -168,7 +180,7 @@ export function InputSelectDevice(
           }
         ).friendly_name ??
         "Input Select",
-      supportedModes: buildSupportedModes(options),
+      supportedModes: buildSupportedModes(displayOptions),
       currentMode: currentIndex >= 0 ? currentIndex : 0,
     },
   });
