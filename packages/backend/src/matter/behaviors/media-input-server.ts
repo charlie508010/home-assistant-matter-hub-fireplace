@@ -8,6 +8,8 @@ import type { ValueGetter, ValueSetter } from "./utils/cluster-config.js";
 export interface MediaInputServerConfig {
   getCurrentSource: ValueGetter<string | undefined>;
   getSourceList: ValueGetter<string[] | undefined>;
+  /** Optional controller-facing labels in the same order as getSourceList(). */
+  getSourceLabels?: ValueGetter<string[] | undefined>;
 
   selectSource: ValueSetter<string>;
 }
@@ -28,17 +30,26 @@ class MediaInputServerBase extends Base {
       return;
     }
     const config = this.state.config;
-    let source_idx = 0;
-    const sourceList = config.getSourceList(entity.state, this.agent)?.sort();
-    const inputList = sourceList?.map((source) => ({
-      index: source_idx++,
+    const rawSources = config.getSourceList(entity.state, this.agent) ?? [];
+    const configuredLabels = config.getSourceLabels?.(entity.state, this.agent);
+    const labels =
+      configuredLabels?.length === rawSources.length
+        ? configuredLabels
+        : rawSources;
+    const sources = rawSources
+      .map((source, index) => ({ source, label: labels[index] }))
+      .sort((a, b) => a.source.localeCompare(b.source));
+    const inputList = sources.map(({ label }, index) => ({
+      index,
       inputType: MediaInput.InputType.Other,
-      name: source,
-      description: source,
+      name: label,
+      description: label,
     }));
     const currentSource = config.getCurrentSource(entity.state, this.agent);
-    let currentInput = sourceList?.indexOf(currentSource ?? "");
-    if (currentInput === -1 || currentInput == null) {
+    let currentInput = sources.findIndex(
+      ({ source }) => source === currentSource,
+    );
+    if (currentInput === -1) {
       currentInput = 0;
     }
     applyPatchState(this.state, {
@@ -49,9 +60,18 @@ class MediaInputServerBase extends Base {
 
   override selectInput(request: MediaInput.SelectInputRequest) {
     const homeAssistant = this.agent.get(HomeAssistantEntityBehavior);
-    const target = this.state.inputList[request.index];
+    const sources = [
+      ...(this.state.config.getSourceList(
+        homeAssistant.entity.state,
+        this.agent,
+      ) ?? []),
+    ].sort((a, b) => a.localeCompare(b));
+    const target = sources[request.index];
+    if (target == null) {
+      return;
+    }
     homeAssistant.callAction(
-      this.state.config.selectSource(target.name, this.agent),
+      this.state.config.selectSource(target, this.agent),
     );
   }
 

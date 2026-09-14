@@ -92,7 +92,7 @@ export interface UserComposedConfig {
 export class UserComposedEndpoint extends Endpoint {
   readonly entityId: string;
   readonly mappedEntityIds: string[];
-  private subEndpoints = new Map<string, Endpoint>();
+  private subEndpoints = new Map<string, Endpoint[]>();
   private lastStates = new Map<string, string>();
   private lastMappedStates = new Map<string, string>();
   private debouncedUpdates = new Map<
@@ -120,7 +120,7 @@ export class UserComposedEndpoint extends Endpoint {
     const endpointId =
       config.endpointId ?? createEndpointId(primaryEntityId, config.customName);
     const parts: Endpoint[] = [];
-    const subEndpointMap = new Map<string, Endpoint>();
+    const subEndpointMap = new Map<string, Endpoint[]>();
     const mappedIds: string[] = [];
 
     // Keep the battery entity subscribed even when it is out of the bridge filter.
@@ -204,21 +204,26 @@ export class UserComposedEndpoint extends Endpoint {
         id: `${endpointId}_primary`,
       });
       parts.push(primarySub);
-      subEndpointMap.set(primaryEntityId, primarySub);
+      subEndpointMap.set(primaryEntityId, [primarySub]);
     }
 
     // Composed sub-entity endpoints
+    const entityOccurrences = new Map<string, number>();
+    const subProfileKeys = new Set<string>();
     for (let i = 0; i < composedEntities.length; i++) {
       const sub = composedEntities[i];
       if (!sub.entityId) continue;
+      const subProfileKey = `${sub.entityId}:${sub.matterDeviceType ?? "auto"}`;
 
       // Merged mode only, so a bridge that never turns the flag on keeps the
       // exact tree it was paired with. The primary is the parent here, and a
-      // repeated entity would mount a second endpoint that no state update ever
-      // reaches, subEndpointMap is keyed by entity id so only the last wins.
+      // The primary already lives on the parent and must not be repeated as a
+      // child. Other entities may intentionally occur more than once with
+      // different Matter device types, which is useful for controller
+      // compatibility tests; all copies receive the same HA state updates.
       if (
         primaryOnParent &&
-        (sub.entityId === primaryEntityId || subEndpointMap.has(sub.entityId))
+        (sub.entityId === primaryEntityId || subProfileKeys.has(subProfileKey))
       ) {
         logger.warn(
           `Composed sub-entity ${sub.entityId} of ${primaryEntityId} is the ` +
@@ -226,6 +231,7 @@ export class UserComposedEndpoint extends Endpoint {
         );
         continue;
       }
+      if (primaryOnParent) subProfileKeys.add(subProfileKey);
 
       const subPayload = buildEntityPayload(registry, sub.entityId);
       if (!subPayload) {
@@ -240,12 +246,28 @@ export class UserComposedEndpoint extends Endpoint {
         entityId: sub.entityId,
         matterDeviceType: sub.matterDeviceType,
         customName: sub.customName?.trim() || undefined,
+        modeSelectOptions:
+          sub.entityId === config.mapping?.modeSelectEntity
+            ? config.mapping.modeSelectOptions
+            : undefined,
       };
+
+      const occurrence = entityOccurrences.get(sub.entityId) ?? 0;
+      entityOccurrences.set(sub.entityId, occurrence + 1);
+      // The first occurrence keeps the historical identity. Additional test
+      // profiles for the same HA entity need distinct Matter UniqueIDs or a
+      // controller may collapse them into one device.
+      const subIdentityAnchor =
+        occurrence === 0
+          ? undefined
+          : `${sub.entityId}:${sub.matterDeviceType ?? "auto"}:${sub.customName ?? occurrence}`;
 
       const subType = createLegacyEndpointType(
         subPayload,
         subMapping,
         config.areaName,
+        undefined,
+        subIdentityAnchor,
       );
       if (!subType) {
         logger.warn(
@@ -258,7 +280,9 @@ export class UserComposedEndpoint extends Endpoint {
         id: `${endpointId}_sub_${i}`,
       });
       parts.push(subEndpoint);
-      subEndpointMap.set(sub.entityId, subEndpoint);
+      const sameEntityEndpoints = subEndpointMap.get(sub.entityId) ?? [];
+      sameEntityEndpoints.push(subEndpoint);
+      subEndpointMap.set(sub.entityId, sameEntityEndpoints);
       mappedIds.push(sub.entityId);
     }
 
@@ -331,8 +355,10 @@ export class UserComposedEndpoint extends Endpoint {
     this.scheduleUpdate(this, this.entityId, states, mappedChanged);
 
     // Update sub-endpoints with their own entity states
-    for (const [entityId, sub] of this.subEndpoints) {
-      this.scheduleUpdate(sub, entityId, states);
+    for (const [entityId, subs] of this.subEndpoints) {
+      for (const sub of subs) {
+        this.scheduleUpdate(sub, entityId, states);
+      }
     }
   }
 
@@ -362,7 +388,8 @@ export class UserComposedEndpoint extends Endpoint {
     const state = states[entityId];
     if (!state) return;
 
-    const key = endpoint === this ? `_parent_:${entityId}` : entityId;
+    const key =
+      endpoint === this ? `_parent_:${entityId}` : `${endpoint.id}:${entityId}`;
 
     const stateJson = JSON.stringify({
       s: state.state,

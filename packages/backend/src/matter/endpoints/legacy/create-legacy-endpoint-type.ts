@@ -134,8 +134,14 @@ export function createLegacyEndpointType(
   const isSelectSwitch =
     (domain === "select" || domain === "input_select") &&
     mapping?.selectExposeAsSwitch === true;
+  const isSelectStageProfile =
+    (domain === "select" || domain === "input_select") &&
+    (mapping?.matterDeviceType === "mode_select" ||
+      mapping?.matterDeviceType === "speaker" ||
+      mapping?.matterDeviceType === "basic_video_player" ||
+      mapping?.matterDeviceType === "fan");
 
-  if (mapping?.matterDeviceType && !isSelectSwitch) {
+  if (mapping?.matterDeviceType && !isSelectSwitch && !isSelectStageProfile) {
     const overrideFactory = matterDeviceTypeFactories[mapping.matterDeviceType];
     if (overrideFactory) {
       type = overrideFactory(ha);
