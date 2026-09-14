@@ -21,6 +21,7 @@ import { InputSelectDevice, SelectDevice } from "./index.js";
 // plain on/off switch whose on/off each pick a configured option.
 
 const PLUG = 0x010a;
+const LIGHT = 0x0100;
 
 let dir: string;
 let env: Environment;
@@ -90,11 +91,26 @@ function mappingFor(entityId: string): EntityMappingConfig {
   };
 }
 
+function mappingForType(
+  entityId: string,
+  matterDeviceType: "on_off_light" | "on_off_plugin_unit",
+): EntityMappingConfig {
+  return {
+    ...mappingFor(entityId),
+    matterDeviceType,
+    customName:
+      matterDeviceType === "on_off_light"
+        ? "Flammenfarbe Licht"
+        : "Flammenfarbe Steckdose",
+  };
+}
+
 // Distinct entity ids per test, the optimistic onOff map is per entity id.
 async function mount(
   entityId: string,
   state: string,
   device: typeof InputSelectDevice = InputSelectDevice,
+  mapping: EntityMappingConfig = mappingFor(entityId),
 ) {
   const server = await ServerNode.create({
     // biome-ignore lint/suspicious/noExplicitAny: env valid at runtime
@@ -108,7 +124,8 @@ async function mount(
   await server.add(aggregator);
   const type = device({
     entity: selectEntity(entityId, state),
-    mapping: mappingFor(entityId),
+    customName: mapping.customName,
+    mapping,
   } as never);
   if (!type) {
     throw new Error("no endpoint type");
@@ -175,5 +192,38 @@ describe("select exposed as switch (#356)", () => {
     await server.close().catch(() => {});
     const call = calls.find((c) => c.action === "select.select_option");
     expect((call?.data as { option?: string }).option).toBe("Casa");
+  });
+
+  it.each([
+    ["on_off_light", LIGHT, "Flammenfarbe Licht"],
+    ["on_off_plugin_unit", PLUG, "Flammenfarbe Steckdose"],
+  ] as const)("exposes %s with its custom Matter NodeLabel and keeps select actions", async (matterDeviceType, expectedType, expectedName) => {
+    const entityId = `select.test_${matterDeviceType}`;
+    const { server, endpoint } = await mount(
+      entityId,
+      "Neutral",
+      SelectDevice,
+      mappingForType(entityId, matterDeviceType),
+    );
+    let types: number[] = [];
+    let nodeLabel: string | undefined;
+    calls.length = 0;
+    await endpoint.act((agent) => {
+      // biome-ignore lint/suspicious/noExplicitAny: inspect Matter state
+      const a = agent as any;
+      types = (
+        a.descriptor.state.deviceTypeList as Array<{ deviceType: number }>
+      ).map((d) => Number(d.deviceType));
+      nodeLabel = a.bridgedDeviceBasicInformation.state.nodeLabel;
+      a.onOff.on();
+    });
+    await server.close().catch(() => {});
+
+    expect(types).toContain(expectedType);
+    expect(nodeLabel).toBe(expectedName);
+    expect(calls).toContainEqual({
+      action: "select.select_option",
+      data: { option: "Casa" },
+    });
   });
 });

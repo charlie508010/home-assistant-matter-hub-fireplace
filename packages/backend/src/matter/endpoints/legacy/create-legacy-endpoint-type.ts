@@ -127,7 +127,15 @@ export function createLegacyEndpointType(
 
   let type: EndpointType | undefined;
 
-  if (mapping?.matterDeviceType) {
+  // A select exposed as an On/Off target still needs the select-specific
+  // service calls that translate on/off into configured options. SelectDevice
+  // itself chooses Light vs Plug from matterDeviceType. The generic override
+  // path would incorrectly call light.turn_on or switch.turn_on on a select.
+  const isSelectSwitch =
+    (domain === "select" || domain === "input_select") &&
+    mapping?.selectExposeAsSwitch === true;
+
+  if (mapping?.matterDeviceType && !isSelectSwitch) {
     const overrideFactory = matterDeviceTypeFactories[mapping.matterDeviceType];
     if (overrideFactory) {
       type = overrideFactory(ha);

@@ -1,7 +1,11 @@
 import type { HomeAssistantEntityInformation } from "@home-assistant-matter-hub/common";
 import type { Agent, EndpointType } from "@matter/main";
 import { GroupsServer, ScenesManagementServer } from "@matter/main/behaviors";
-import { ModeSelectDevice, OnOffPlugInUnitDevice } from "@matter/main/devices";
+import {
+  ModeSelectDevice,
+  OnOffLightDevice,
+  OnOffPlugInUnitDevice,
+} from "@matter/main/devices";
 import { BasicInformationServer } from "../../../behaviors/basic-information-server.js";
 import { HomeAssistantEntityBehavior } from "../../../behaviors/home-assistant-entity-behavior.js";
 import { IdentifyServer } from "../../../behaviors/identify-server.js";
@@ -44,44 +48,66 @@ const InputSelectModeServer = buildSelectModeServer(
 
 // Controllers can't render ModeSelect (#356), so a select can opt into a
 // plain switch instead: "on" and "off" each select a configured option.
-function buildSelectSwitchType(action: string) {
+function buildSelectOnOffServer(action: string) {
   const option = (agent: Agent, key: "on" | "off") => {
     const mapping = agent.get(HomeAssistantEntityBehavior).state.mapping;
     return key === "on"
       ? mapping?.selectSwitchOnOption
       : mapping?.selectSwitchOffOption;
   };
-  return OnOffPlugInUnitDevice.with(
-    BasicInformationServer,
-    IdentifyServer,
-    HomeAssistantEntityBehavior,
-    GroupsServer,
-    ScenesManagementServer,
-    OnOffServer({
-      // Case-insensitive like the ModeSelect path, some integrations
-      // report options with different casing.
-      isOn: (state, agent) =>
-        state.state?.toLowerCase() === option(agent, "on")?.toLowerCase(),
-      turnOn: (_, agent) => ({
-        action,
-        data: { option: option(agent, "on") },
-      }),
-      turnOff: (_, agent) => ({
-        action,
-        data: { option: option(agent, "off") },
-      }),
+  return OnOffServer({
+    // Case-insensitive like the ModeSelect path, some integrations
+    // report options with different casing.
+    isOn: (state, agent) =>
+      state.state?.toLowerCase() === option(agent, "on")?.toLowerCase(),
+    turnOn: (_, agent) => ({
+      action,
+      data: { option: option(agent, "on") },
     }),
-  );
+    turnOff: (_, agent) => ({
+      action,
+      data: { option: option(agent, "off") },
+    }),
+  });
 }
 
-const SelectSwitchType = buildSelectSwitchType("select.select_option");
-const InputSelectSwitchType = buildSelectSwitchType(
-  "input_select.select_option",
+const SelectPlugSwitchType = OnOffPlugInUnitDevice.with(
+  BasicInformationServer,
+  IdentifyServer,
+  HomeAssistantEntityBehavior,
+  GroupsServer,
+  ScenesManagementServer,
+  buildSelectOnOffServer("select.select_option"),
+);
+const SelectLightSwitchType = OnOffLightDevice.with(
+  BasicInformationServer,
+  IdentifyServer,
+  HomeAssistantEntityBehavior,
+  GroupsServer,
+  ScenesManagementServer,
+  buildSelectOnOffServer("select.select_option"),
+);
+const InputSelectPlugSwitchType = OnOffPlugInUnitDevice.with(
+  BasicInformationServer,
+  IdentifyServer,
+  HomeAssistantEntityBehavior,
+  GroupsServer,
+  ScenesManagementServer,
+  buildSelectOnOffServer("input_select.select_option"),
+);
+const InputSelectLightSwitchType = OnOffLightDevice.with(
+  BasicInformationServer,
+  IdentifyServer,
+  HomeAssistantEntityBehavior,
+  GroupsServer,
+  ScenesManagementServer,
+  buildSelectOnOffServer("input_select.select_option"),
 );
 
 function selectAsSwitch(
   homeAssistantEntity: HomeAssistantEntityBehavior.State,
-  type: typeof SelectSwitchType,
+  plugType: typeof SelectPlugSwitchType,
+  lightType: typeof SelectLightSwitchType,
 ): EndpointType | undefined {
   const mapping = homeAssistantEntity.mapping;
   if (
@@ -91,6 +117,11 @@ function selectAsSwitch(
   ) {
     return undefined;
   }
+  const type =
+    mapping.matterDeviceType === "on_off_light" ||
+    mapping.matterDeviceType === "on_off_switch"
+      ? lightType
+      : plugType;
   return type.set({ homeAssistantEntity });
 }
 
@@ -111,7 +142,11 @@ const InputSelectEndpointType = ModeSelectDevice.with(
 export function SelectDevice(
   homeAssistantEntity: HomeAssistantEntityBehavior.State,
 ): EndpointType | undefined {
-  const asSwitch = selectAsSwitch(homeAssistantEntity, SelectSwitchType);
+  const asSwitch = selectAsSwitch(
+    homeAssistantEntity,
+    SelectPlugSwitchType,
+    SelectLightSwitchType,
+  );
   if (asSwitch) {
     return asSwitch;
   }
@@ -150,7 +185,11 @@ export function SelectDevice(
 export function InputSelectDevice(
   homeAssistantEntity: HomeAssistantEntityBehavior.State,
 ): EndpointType | undefined {
-  const asSwitch = selectAsSwitch(homeAssistantEntity, InputSelectSwitchType);
+  const asSwitch = selectAsSwitch(
+    homeAssistantEntity,
+    InputSelectPlugSwitchType,
+    InputSelectLightSwitchType,
+  );
   if (asSwitch) {
     return asSwitch;
   }

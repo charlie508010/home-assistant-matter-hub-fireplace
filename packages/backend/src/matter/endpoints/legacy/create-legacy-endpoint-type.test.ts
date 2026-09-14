@@ -313,6 +313,31 @@ describe("explicit matterDeviceType battery (#408)", () => {
   });
 });
 
+describe("select switch device type", () => {
+  const entity = createEntity("select.kamin_test", "Stufe 0", {
+    options: ["Stufe 0", "Stufe 2"],
+  });
+
+  it.each([
+    ["on_off_light", 0x0100],
+    ["on_off_plugin_unit", 0x010a],
+  ] as const)("keeps select translation while exposing %s", (deviceType, id) => {
+    const type = createLegacyEndpointType(entity, {
+      entityId: entity.entity_id,
+      matterDeviceType: deviceType,
+      customName: `Test ${deviceType}`,
+      selectExposeAsSwitch: true,
+      selectSwitchOnOption: "Stufe 2",
+      selectSwitchOffOption: "Stufe 0",
+    });
+
+    expect(type).toBeDefined();
+    expect(type!.deviceType).toBe(id);
+    expect(type!.behaviors).toHaveProperty("onOff");
+    expect(type!.behaviors).not.toHaveProperty("modeSelect");
+  });
+});
+
 // The pm25, pm10 and co2 endpoints existed but were not selectable as an
 // override, unlike every sibling gas sensor.
 describe("particulate and co2 overrides", () => {
