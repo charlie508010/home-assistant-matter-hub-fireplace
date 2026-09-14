@@ -3,8 +3,6 @@ import {
   LightDeviceColorMode,
 } from "@home-assistant-matter-hub/common";
 import type { EndpointType } from "@matter/main";
-import { DescriptorServer } from "@matter/main/behaviors";
-import { DeviceTypeId } from "@matter/main/types";
 import { EntityStateProvider } from "../../../../services/bridges/entity-state-provider.js";
 import { HaElectricalEnergyMeasurementServer } from "../../../behaviors/electrical-energy-measurement-server.js";
 import { HaElectricalPowerMeasurementServer } from "../../../behaviors/electrical-power-measurement-server.js";
@@ -57,11 +55,6 @@ const LightModeSelectServer = ModeSelectServer({
   }),
 });
 
-const modeSelectDeviceType = {
-  deviceType: DeviceTypeId(0x0027),
-  revision: 1,
-};
-
 export function LightDevice(
   homeAssistantEntity: HomeAssistantEntityBehavior.State,
 ): EndpointType {
@@ -96,13 +89,13 @@ export function LightDevice(
   // ColorTemperatureLightDevice has issues with Matter.js initialization that cause
   // "Behaviors have errors" during endpoint creation. ExtendedColorLight works correctly
   // with just the ColorTemperature feature enabled (supportsColorControl=false).
-  // A mapped ModeSelect represents a staged appliance rather than a dimmable
-  // lamp. Keep it on a lamp device type for Alexa's Matter ModeSelect support,
-  // but omit LevelControl so Alexa cannot mistake "Stufe" for brightness.
+  // Alexa maps Mode Select to Alexa.ModeController only for selected primary
+  // device types such as a lamp. Certified Govee lamps expose ModeSelect as an
+  // additional cluster on one ExtendedColorLight endpoint; they do not add the
+  // standalone ModeSelect (0x0027) device type to DeviceTypeList. Mirror that
+  // topology here when a light has a mapped mode selector.
   const deviceType = hasModeSelect
-    ? hasBattery
-      ? OnOffLightWithBatteryType
-      : OnOffLightType
+    ? ExtendedColorLightType(true, true, hasBattery)
     : supportsColorControl || supportsColorTemperature
       ? ExtendedColorLightType(
           supportsColorControl,
@@ -138,20 +131,7 @@ export function LightDevice(
   }
 
   if (hasModeSelect) {
-    // Alexa maps a lamp's Mode Select cluster to Alexa.ModeController. Declare
-    // both device types so every server cluster belongs to a device type:
-    // On/Off Light owns OnOff and Mode Select owns ModeSelect. Advertising the
-    // cluster on a light-only descriptor is non-conformant and Alexa drops it.
-    device = device.with(DescriptorServer, LightModeSelectServer).set({
-      descriptor: {
-        deviceTypeList: [
-          {
-            deviceType: deviceType.deviceType,
-            revision: deviceType.deviceRevision,
-          },
-          modeSelectDeviceType,
-        ],
-      },
+    device = device.with(LightModeSelectServer).set({
       modeSelect: {
         description: homeAssistantEntity.mapping?.modeSelectName ?? "Stufe",
         supportedModes: buildSupportedModes(modeSelectOptions),

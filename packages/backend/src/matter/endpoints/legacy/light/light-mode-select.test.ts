@@ -15,7 +15,7 @@ import {
   type HomeAssistantAction,
   HomeAssistantActions,
 } from "../../../../services/home-assistant/home-assistant-actions.js";
-import { AggregatorEndpoint } from "../../aggregator-endpoint.js";
+import { asStandaloneEndpointType } from "../../standalone-endpoint-type.js";
 import { LightDevice } from "./index.js";
 
 const modeEntityId = "select.kamin_matter_flammenfarbe";
@@ -98,21 +98,21 @@ describe("light with mapped ModeSelect", () => {
       commissioning: { passcode: 20202021, discriminator: 3840 },
       basicInformation: { vendorId: VendorId(0xfff1), productId: 0x8000 },
     });
-    const aggregator = new AggregatorEndpoint("aggregator");
-    await server.add(aggregator);
     const endpoint = new Endpoint(
-      LightDevice({
-        entity: fireplaceLight(),
-        mapping: {
-          entityId: "light.kamin",
-          modeSelectEntity: modeEntityId,
-          modeSelectName: "Flammenfarbe",
-          modeSelectOptions: options,
-        },
-      }),
+      asStandaloneEndpointType(
+        LightDevice({
+          entity: fireplaceLight(),
+          mapping: {
+            entityId: "light.kamin",
+            modeSelectEntity: modeEntityId,
+            modeSelectName: "Flammenfarbe",
+            modeSelectOptions: options,
+          },
+        }),
+      ),
       { id: "kamin" },
     );
-    await aggregator.add(endpoint);
+    await server.add(endpoint);
 
     const deviceTypes = (
       endpoint.state.descriptor as {
@@ -127,12 +127,10 @@ describe("light with mapped ModeSelect", () => {
         Number(deviceType),
         revision,
       ]),
-    ).toEqual([
-      [0x0100, 3],
-      [0x0027, 1],
-      [0x0013, 3],
-    ]);
-    expect(endpoint.state.levelControl).toBeUndefined();
+    ).toEqual([[0x010d, 4]]);
+    expect(endpoint.number).toBe(1);
+    expect(endpoint.state.levelControl).toBeDefined();
+    expect(endpoint.state.colorControl).toBeDefined();
 
     const modeState = endpoint.state.modeSelect as {
       description: string;
