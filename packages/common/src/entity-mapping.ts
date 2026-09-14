@@ -4,6 +4,7 @@ export type MatterDeviceType =
   | "air_purifier"
   | "air_quality_sensor"
   | "dishwasher"
+  | "laundry_washer"
   | "basic_video_player"
   | "battery_storage"
   | "carbon_monoxide_sensor"
@@ -129,6 +130,10 @@ export interface EntityMappingConfig {
    * Example: "sensor.air_purifier_temperature"
    */
   readonly temperatureEntity?: string;
+  /** Optional switch used as the real On/Off control for an appliance profile. */
+  readonly powerSwitchEntity?: string;
+  /** Optional entity used to derive the appliance Operational State. */
+  readonly operationalStateEntity?: string;
   /**
    * Optional: Entity ID of a humidity sensor to combine with a temperature sensor
    * or a fan/air purifier. Creates a combined device in Matter controllers.
@@ -497,6 +502,8 @@ export interface EntityMappingRequest {
   readonly filterLifeEntity?: string;
   readonly cleaningModeEntity?: string;
   readonly temperatureEntity?: string;
+  readonly powerSwitchEntity?: string;
+  readonly operationalStateEntity?: string;
   readonly humidityEntity?: string;
   readonly pressureEntity?: string;
   readonly batteryEntity?: string;
@@ -567,6 +574,7 @@ export const matterDeviceTypeLabels: Record<MatterDeviceType, string> = {
   color_temperature_light: "Color Temperature Light",
   contact_sensor: "Contact Sensor",
   dishwasher: "Dishwasher",
+  laundry_washer: "Laundry Washer",
   dimmable_light: "Dimmable Light",
   dimmable_plugin_unit: "Dimmable Plug-in Unit",
   door_lock: "Door Lock",
@@ -719,6 +727,13 @@ export const matterDeviceTypeControllerSupport: Record<
     alexa: "unknown",
     aqara: "unknown",
     note: "Appliance types have little controller support today.",
+  },
+  laundry_washer: {
+    apple: "no",
+    google: "no",
+    alexa: "unknown",
+    aqara: "unknown",
+    note: "Matter Laundry Washer (0x0073) with washer mode, operational state and optional power.",
   },
   speaker: {
     apple: "no",
@@ -994,10 +1009,11 @@ export const domainToDefaultMatterTypes: Partial<
     "temperature_sensor",
     "tvoc_sensor",
   ],
-  select: ["mode_select"],
+  select: ["mode_select", "laundry_washer"],
   siren: ["on_off_plugin_unit"],
   switch: [
     "dishwasher",
+    "laundry_washer",
     "evse",
     "on_off_plugin_unit",
     "on_off_switch",

@@ -45,6 +45,8 @@ export function entityMappingApi(
       filterLifeEntity: body.filterLifeEntity,
       cleaningModeEntity: body.cleaningModeEntity,
       temperatureEntity: body.temperatureEntity,
+      powerSwitchEntity: body.powerSwitchEntity,
+      operationalStateEntity: body.operationalStateEntity,
       humidityEntity: body.humidityEntity,
       pressureEntity: body.pressureEntity,
       batteryEntity: body.batteryEntity,

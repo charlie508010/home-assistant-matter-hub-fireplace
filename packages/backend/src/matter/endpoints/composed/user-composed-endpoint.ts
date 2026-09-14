@@ -95,6 +95,7 @@ export class UserComposedEndpoint extends Endpoint {
   private subEndpoints = new Map<string, Endpoint[]>();
   private lastStates = new Map<string, string>();
   private lastMappedStates = new Map<string, string>();
+  private parentMappedEntityIds = new Set<string>();
   private debouncedUpdates = new Map<
     string,
     ReturnType<
@@ -122,6 +123,12 @@ export class UserComposedEndpoint extends Endpoint {
     const parts: Endpoint[] = [];
     const subEndpointMap = new Map<string, Endpoint[]>();
     const mappedIds: string[] = [];
+    const parentMappedIds = [
+      config.mapping?.powerSwitchEntity,
+      config.mapping?.operationalStateEntity,
+      config.mapping?.temperatureEntity,
+    ].filter((id): id is string => !!id);
+    mappedIds.push(...parentMappedIds);
 
     // Keep the battery entity subscribed even when it is out of the bridge filter.
     if (hasParentBattery && config.mapping?.batteryEntity) {
@@ -313,6 +320,7 @@ export class UserComposedEndpoint extends Endpoint {
       endpointId,
       parts,
       mappedIds,
+      parentMappedIds,
     );
 
     endpoint.subEndpoints = subEndpointMap;
@@ -337,10 +345,12 @@ export class UserComposedEndpoint extends Endpoint {
     id: string,
     parts: Endpoint[],
     mappedEntityIds: string[],
+    parentMappedEntityIds: string[],
   ) {
     super(type, { id, parts });
     this.entityId = entityId;
     this.mappedEntityIds = mappedEntityIds;
+    this.parentMappedEntityIds = new Set(parentMappedEntityIds);
   }
 
   async updateStates(states: HomeAssistantStates): Promise<void> {
@@ -368,7 +378,11 @@ export class UserComposedEndpoint extends Endpoint {
   private hasMappedNonSubEntityChanged(states: HomeAssistantStates): boolean {
     let changed = false;
     for (const mappedId of this.mappedEntityIds) {
-      if (this.subEndpoints.has(mappedId)) continue;
+      if (
+        this.subEndpoints.has(mappedId) &&
+        !this.parentMappedEntityIds.has(mappedId)
+      )
+        continue;
       const mappedState = states[mappedId];
       if (!mappedState) continue;
       if (mappedState.state !== this.lastMappedStates.get(mappedId)) {

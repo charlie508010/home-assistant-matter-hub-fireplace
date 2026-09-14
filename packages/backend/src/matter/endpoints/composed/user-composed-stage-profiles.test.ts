@@ -12,12 +12,15 @@ import { describe, expect, it } from "vitest";
 import { BridgeDataProvider } from "../../../services/bridges/bridge-data-provider.js";
 import { EntityStateProvider } from "../../../services/bridges/entity-state-provider.js";
 import { HomeAssistantActions } from "../../../services/home-assistant/home-assistant-actions.js";
+import { HomeAssistantConfig } from "../../../services/home-assistant/home-assistant-config.js";
 import { HomeAssistantEntityBehavior } from "../../behaviors/home-assistant-entity-behavior.js";
 import { AggregatorEndpoint } from "../aggregator-endpoint.js";
 import { UserComposedEndpoint } from "./user-composed-endpoint.js";
 
 const LIGHT = "light.kamin";
 const SELECT = "select.kamin_matter_flammenfarbe";
+const POWER = "switch.kamin_ein_aus";
+const TEMPERATURE = "sensor.kamin_ist_temperatur";
 const labels = Array.from({ length: 6 }, (_, index) => `Stufe ${index}`);
 
 function state(
@@ -115,6 +118,9 @@ describe("composed select stage compatibility profiles", () => {
     env.set(EntityStateProvider, {
       getState: (entityId: string) => states[entityId],
     } as never);
+    env.set(HomeAssistantConfig, {
+      unitSystem: { temperature: "°C" },
+    } as never);
     env.set(HomeAssistantActions, { call() {}, fireEvent() {} } as never);
     const server = await ServerNode.create({
       environment: env as never,
@@ -152,6 +158,117 @@ describe("composed select stage compatibility profiles", () => {
         (part) => (part.entity as HomeAssistantEntityInformation).entity_id,
       ),
     ).toEqual([SELECT, SELECT, SELECT, SELECT]);
+
+    await server.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("combines a Laundry Washer parent with power and temperature children", async () => {
+    const states: Record<string, HomeAssistantEntityState> = {
+      [SELECT]: state(SELECT, "C2", {
+        friendly_name: "Flammenfarbe",
+        options: ["C0", "C1", "C2", "C3", "C4", "C5"],
+      }),
+      [POWER]: state(POWER, "on", { friendly_name: "Kamin Power" }),
+      [TEMPERATURE]: state(TEMPERATURE, "23", {
+        friendly_name: "Kamin Temperatur",
+        device_class: "temperature",
+        unit_of_measurement: "°C",
+      }),
+    };
+    const registry = {
+      initialStateIncludingUnfiltered: (entityId: string) => states[entityId],
+      entityIncludingUnfiltered: (entityId: string) => ({
+        entity_id: entityId,
+      }),
+      deviceOfIncludingUnfiltered: () => undefined,
+      isVacuumOnOffEnabled: () => false,
+      isComposedPrimaryOnParentEnabled: () => true,
+    };
+    const endpoint = await UserComposedEndpoint.create({
+      registry: registry as never,
+      primaryEntityId: SELECT,
+      mapping: {
+        entityId: SELECT,
+        matterDeviceType: "laundry_washer",
+        customName: "Kamin Washer Multi",
+        modeSelectOptions: labels,
+        powerSwitchEntity: POWER,
+        operationalStateEntity: POWER,
+        temperatureEntity: TEMPERATURE,
+      },
+      composedEntities: [
+        {
+          entityId: POWER,
+          matterDeviceType: "on_off_plugin_unit",
+          customName: "Kamin Power",
+        },
+        {
+          entityId: TEMPERATURE,
+          matterDeviceType: "temperature_sensor",
+          customName: "Kamin Temperatur",
+        },
+      ],
+      customName: "Kamin Washer Multi",
+    });
+
+    expect(endpoint).toBeDefined();
+    const dir = mkdtempSync(join(tmpdir(), "hamh-washer-multi-"));
+    const env = new Environment("test", Environment.default);
+    env.get(VariableService).set("storage.path", dir);
+    env.set(
+      BridgeDataProvider,
+      new BridgeDataProvider({
+        id: "washer-multi",
+        name: "Kamin Washer Multi",
+        port: 0,
+        filter: { include: [], exclude: [], includeMode: "any" },
+        basicInformation: {
+          vendorId: 0xfff1,
+          vendorName: "Test",
+          productName: "Test",
+          productLabel: "Test",
+          hardwareVersion: 1,
+          softwareVersion: 1,
+        },
+      } as never),
+    );
+    env.set(EntityStateProvider, {
+      getState: (entityId: string) => states[entityId],
+    } as never);
+    env.set(HomeAssistantActions, { call() {}, fireEvent() {} } as never);
+    env.set(HomeAssistantConfig, {
+      unitSystem: { temperature: "°C" },
+    } as never);
+    const server = await ServerNode.create({
+      environment: env as never,
+      id: "washer-multi",
+      network: { port: 0 },
+      commissioning: { passcode: 20202021, discriminator: 3840 },
+      basicInformation: { vendorId: VendorId(0xfff1), productId: 0x8000 },
+    });
+    const aggregator = new AggregatorEndpoint("aggregator");
+    await server.add(aggregator);
+    await aggregator.add(endpoint!);
+
+    await endpoint!.act((agent) => {
+      // biome-ignore lint/suspicious/noExplicitAny: inspect live Matter state
+      const a = agent as any;
+      expect(
+        a.descriptor.state.deviceTypeList.map((entry: { deviceType: number }) =>
+          Number(entry.deviceType),
+        ),
+      ).toContain(0x0073);
+      expect(a.onOff.state.onOff).toBe(true);
+      expect(a.operationalState.state.operationalState).toBe(1);
+      expect(a.temperatureMeasurement.state.measuredValue).toBe(2300);
+      expect(
+        a.laundryWasherMode.state.supportedModes.map(
+          (mode: { label: string }) => mode.label,
+        ),
+      ).toEqual(labels);
+    });
+    expect([...endpoint!.parts]).toHaveLength(2);
 
     await server.close();
     rmSync(dir, { recursive: true, force: true });

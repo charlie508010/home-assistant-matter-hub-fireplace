@@ -10,6 +10,7 @@ import { Endpoint, VendorId } from "@matter/main";
 import { ServerNode } from "@matter/main/node";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BridgeDataProvider } from "../../../../services/bridges/bridge-data-provider.js";
+import { EntityStateProvider } from "../../../../services/bridges/entity-state-provider.js";
 import {
   type HomeAssistantAction,
   HomeAssistantActions,
@@ -30,6 +31,8 @@ const LABELS = [
 let dir: string;
 let env: Environment;
 let calls: HomeAssistantAction[];
+let callTargets: string[];
+let mappedStates: Record<string, HomeAssistantEntityInformation["state"]>;
 let server: ServerNode | undefined;
 
 beforeEach(() => {
@@ -37,9 +40,17 @@ beforeEach(() => {
   env = new Environment("test", Environment.default);
   env.get(VariableService).set("storage.path", dir);
   calls = [];
+  callTargets = [];
+  mappedStates = {};
   env.set(HomeAssistantActions, {
-    call(action: HomeAssistantAction) {
+    call(action: HomeAssistantAction, entityId: string) {
       calls.push(action);
+      callTargets.push(entityId);
+    },
+  } as never);
+  env.set(EntityStateProvider, {
+    getState(entityId: string) {
+      return mappedStates[entityId];
     },
   } as never);
   env.set(
@@ -93,15 +104,18 @@ async function mount(
     | "air_purifier"
     | "on_off_light"
     | "dishwasher"
+    | "laundry_washer"
     | "robot_vacuum_cleaner"
     | "window_covering",
   customName: string,
+  mappingOverrides: Partial<EntityMappingConfig> = {},
 ) {
   const mapping: EntityMappingConfig = {
     entityId: "select.kamin_matter_flammenfarbe",
     matterDeviceType,
     customName,
     modeSelectOptions: LABELS,
+    ...mappingOverrides,
   };
   const type = SelectDevice({
     entity: selectEntity(),
@@ -277,6 +291,43 @@ describe("select Matter stage compatibility profiles", () => {
       await a.dishwasherMode.changeToMode({ newMode: 4 });
     });
     expect(selectedOptions()).toContain("C4");
+  });
+
+  it("combines Laundry Washer Mode with mapped power, status and temperature", async () => {
+    mappedStates = {
+      "switch.kamin_ein_aus": {
+        entity_id: "switch.kamin_ein_aus",
+        state: "on",
+        attributes: {},
+      } as never,
+      "sensor.kamin_ist_temperatur": {
+        entity_id: "sensor.kamin_ist_temperatur",
+        state: "23",
+        attributes: { unit_of_measurement: "°C" },
+      } as never,
+    };
+    const endpoint = await mount("laundry_washer", "Kamin Washer Komplett", {
+      powerSwitchEntity: "switch.kamin_ein_aus",
+      operationalStateEntity: "switch.kamin_ein_aus",
+      temperatureEntity: "sensor.kamin_ist_temperatur",
+    });
+    await endpoint.act(async (agent) => {
+      // biome-ignore lint/suspicious/noExplicitAny: inspect live Matter state
+      const a = agent as any;
+      expect(a.onOff.state.onOff).toBe(true);
+      expect(a.operationalState.state.operationalState).toBe(1);
+      expect(a.temperatureMeasurement.state.measuredValue).toBe(2300);
+      expect(
+        a.laundryWasherMode.state.supportedModes.map(
+          (mode: { label: string }) => mode.label,
+        ),
+      ).toEqual(LABELS);
+      await a.onOff.off();
+    });
+    expect(callTargets).toContain("switch.kamin_ein_aus");
+    expect(calls.map((call) => call.action)).toContain(
+      "homeassistant.turn_off",
+    );
   });
 
   it("exposes six RVC Run Mode choices", async () => {

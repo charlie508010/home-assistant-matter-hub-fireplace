@@ -167,6 +167,9 @@ export class EntityMappingStorage extends Service {
       filterLifeEntity: request.filterLifeEntity?.trim() || undefined,
       cleaningModeEntity: request.cleaningModeEntity?.trim() || undefined,
       temperatureEntity: request.temperatureEntity?.trim() || undefined,
+      powerSwitchEntity: request.powerSwitchEntity?.trim() || undefined,
+      operationalStateEntity:
+        request.operationalStateEntity?.trim() || undefined,
       humidityEntity: request.humidityEntity?.trim() || undefined,
       batteryEntity: request.batteryEntity?.trim() || undefined,
       disableBatteryMapping: request.disableBatteryMapping || undefined,
@@ -253,6 +256,8 @@ export class EntityMappingStorage extends Service {
       !config.filterLifeEntity &&
       !config.cleaningModeEntity &&
       !config.temperatureEntity &&
+      !config.powerSwitchEntity &&
+      !config.operationalStateEntity &&
       !config.humidityEntity &&
       !config.batteryEntity &&
       !config.disableBatteryMapping &&

@@ -65,6 +65,8 @@ export interface OnOffConfig {
   isOn?: ValueGetter<boolean>;
   turnOn?: OnOffCallback | null;
   turnOff?: OnOffCallback | null;
+  /** Route commands and optimistic state to another mapped HA entity. */
+  targetEntity?: string;
 }
 
 // biome-ignore lint/correctness/noUnusedVariables: Biome thinks this is unused, but it's used by the function below
@@ -84,8 +86,8 @@ class OnOffServerBase extends Base {
     }
     const { state } = entity;
     const onOff = this.isOn(state);
-    const entityId = this.agent.get(HomeAssistantEntityBehavior).entity
-      .entity_id;
+    const homeAssistant = this.agent.get(HomeAssistantEntityBehavior);
+    const entityId = this.state.config.targetEntity ?? homeAssistant.entityId;
     const optimistic = optimisticOnOffState.get(entityId);
     if (optimistic != null) {
       if (Date.now() - optimistic.timestamp > OPTIMISTIC_TIMEOUT_MS) {
@@ -114,9 +116,11 @@ class OnOffServerBase extends Base {
       return;
     }
     const homeAssistant = this.agent.get(HomeAssistantEntityBehavior);
+    const targetEntity =
+      this.state.config.targetEntity ?? homeAssistant.entityId;
     const action = turnOn
       ? turnOn(void 0, this.agent)
-      : defaultOnOffAction(homeAssistant.entityId, true);
+      : defaultOnOffAction(targetEntity, true);
     // Momentary entities (script/scene/automation/input_button) normally get
     // an optimistic onOff true plus a ~1s auto-reset to false, producing an
     // unsolicited on->off report pair per activation. Some Echo devices wedge
@@ -135,18 +139,18 @@ class OnOffServerBase extends Base {
       // (e.g., climate already on, no need to send turn_on)
       return;
     }
-    logger.info(`[${homeAssistant.entityId}] Turning ON -> ${action.action}`);
+    logger.info(`[${targetEntity}] Turning ON -> ${action.action}`);
     // Notify LevelControlServer about turn-on for Alexa brightness workaround
-    notifyLightTurnedOn(homeAssistant.entityId);
+    notifyLightTurnedOn(targetEntity);
     if (!skipMomentaryFlip) {
       const now = Date.now();
       sweepOptimisticOnOff(now);
-      optimisticOnOffState.set(homeAssistant.entityId, {
+      optimisticOnOffState.set(targetEntity, {
         expectedOnOff: true,
         timestamp: now,
       });
     }
-    homeAssistant.callAction(action);
+    homeAssistant.callActionForEntity(action, targetEntity);
     // Auto-reset for momentary actions (scenes, automations) so controllers
     // don't show a permanently "on" state after activation.
     if (turnOff === null && !skipMomentaryFlip) {
@@ -161,9 +165,11 @@ class OnOffServerBase extends Base {
       return;
     }
     const homeAssistant = this.agent.get(HomeAssistantEntityBehavior);
+    const targetEntity =
+      this.state.config.targetEntity ?? homeAssistant.entityId;
     const action = turnOff
       ? turnOff(void 0, this.agent)
-      : defaultOnOffAction(homeAssistant.entityId, false);
+      : defaultOnOffAction(targetEntity, false);
     // Set onOff immediately so the controller gets instant feedback in the
     // command response. Without this, Apple Home shows "Turning off..." until
     // the async HA WebSocket state update arrives (#219).
@@ -171,25 +177,27 @@ class OnOffServerBase extends Base {
     // Tell LevelControlServer a Matter off just happened, so the level command
     // Google sends right after a room-off does not relight the room (#434).
     notifyLightTurnedOff(
-      homeAssistant.entityId,
+      targetEntity,
       homeAssistant.entity.state?.last_changed,
     );
     if (!action) {
       return;
     }
-    logger.info(`[${homeAssistant.entityId}] Turning OFF -> ${action.action}`);
+    logger.info(`[${targetEntity}] Turning OFF -> ${action.action}`);
     const now = Date.now();
     sweepOptimisticOnOff(now);
-    optimisticOnOffState.set(homeAssistant.entityId, {
+    optimisticOnOffState.set(targetEntity, {
       expectedOnOff: false,
       timestamp: now,
     });
-    homeAssistant.callAction(action);
+    homeAssistant.callActionForEntity(action, targetEntity);
   }
 
   private autoReset() {
     const homeAssistant = this.agent.get(HomeAssistantEntityBehavior);
-    optimisticOnOffState.delete(homeAssistant.entityId);
+    optimisticOnOffState.delete(
+      this.state.config.targetEntity ?? homeAssistant.entityId,
+    );
     this.update(homeAssistant.entity);
   }
 }

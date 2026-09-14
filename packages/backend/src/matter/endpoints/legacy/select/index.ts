@@ -9,9 +9,11 @@ import {
   ScenesManagementServer,
 } from "@matter/main/behaviors";
 import { DishwasherModeServer as BaseDishwasherModeServer } from "@matter/main/behaviors/dishwasher-mode";
+import { LaundryWasherModeServer as BaseLaundryWasherModeServer } from "@matter/main/behaviors/laundry-washer-mode";
 import {
   DishwasherMode,
   FanControl,
+  LaundryWasherMode,
   RvcOperationalState,
   RvcRunMode,
   WindowCovering,
@@ -47,7 +49,10 @@ import {
 } from "../../../behaviors/rvc-run-mode-server.js";
 import { SpeakerLevelControlServer } from "../../../behaviors/speaker-level-control-server.js";
 import { WindowCoveringServer } from "../../../behaviors/window-covering-server.js";
-import { DishwasherEndpoint } from "../dishwasher/index.js";
+import {
+  DishwasherEndpoint,
+  LaundryWasherEndpoint,
+} from "../dishwasher/index.js";
 import { MediaPlayerKeypadInputServer } from "../media-player/behaviors/media-player-keypad-input-server.js";
 import { MediaPlayerMediaPlaybackServer } from "../media-player/behaviors/media-player-media-playback-server.js";
 import { createDefaultRvcCleanModeServer } from "../vacuum/behaviors/vacuum-rvc-clean-mode-server.js";
@@ -340,6 +345,97 @@ function buildSelectDishwasherModeServer(
   });
 }
 
+function laundryWasherModes(state: HomeAssistantEntityState, agent: Agent) {
+  const tags = [
+    LaundryWasherMode.ModeTag.Normal,
+    LaundryWasherMode.ModeTag.Quick,
+    LaundryWasherMode.ModeTag.Delicate,
+    LaundryWasherMode.ModeTag.LowEnergy,
+    LaundryWasherMode.ModeTag.Heavy,
+    LaundryWasherMode.ModeTag.Max,
+  ];
+  return getDisplayOptions(state, agent).map((label, mode) => ({
+    label,
+    mode,
+    modeTags: [{ value: tags[mode] ?? LaundryWasherMode.ModeTag.Normal }],
+  }));
+}
+
+// biome-ignore lint/correctness/noUnusedVariables: Used by the factory below
+class SelectLaundryWasherModeServerBase extends BaseLaundryWasherModeServer {
+  declare state: SelectLaundryWasherModeServerBase.State;
+
+  override async initialize() {
+    await super.initialize();
+    const homeAssistant = await this.agent.load(HomeAssistantEntityBehavior);
+    this.update(homeAssistant.entity);
+    this.reactTo(homeAssistant.onChange, this.update, {
+      offline: true,
+      lock: true,
+    });
+  }
+
+  private update(entity: HomeAssistantEntityInformation) {
+    const options = getSelectOptions(entity);
+    if (options.length === 0) return;
+    const currentMode = options.findIndex(
+      (option) => option.toLowerCase() === entity.state.state?.toLowerCase(),
+    );
+    applyPatchState(this.state, {
+      supportedModes: laundryWasherModes(entity.state, this.agent),
+      currentMode: currentMode >= 0 ? currentMode : 0,
+    });
+  }
+
+  override async changeToMode(request: ModeBase.ChangeToModeRequest) {
+    const result = await super.changeToMode(request);
+    if (result.status === ModeBase.ModeChangeStatus.Success) {
+      const homeAssistant = this.agent.get(HomeAssistantEntityBehavior);
+      const option = getSelectOptions(homeAssistant.entity)[request.newMode];
+      if (option !== undefined) {
+        homeAssistant.callAction(selectOptionAction(this.state.action, option));
+      }
+    }
+    return result;
+  }
+}
+
+namespace SelectLaundryWasherModeServerBase {
+  export class State extends BaseLaundryWasherModeServer.State {
+    action!: SelectAction;
+  }
+}
+
+function buildSelectLaundryWasherModeServer(
+  action: SelectAction,
+  homeAssistantEntity: HomeAssistantEntityBehavior.State,
+) {
+  const state = homeAssistantEntity.entity.state;
+  const options = getStateOptions(state);
+  const currentMode = options.findIndex(
+    (option) => option.toLowerCase() === state.state?.toLowerCase(),
+  );
+  const labels = homeAssistantEntity.mapping?.modeSelectOptions;
+  const displayOptions = labels?.length === options.length ? labels : options;
+  const tags = [
+    LaundryWasherMode.ModeTag.Normal,
+    LaundryWasherMode.ModeTag.Quick,
+    LaundryWasherMode.ModeTag.Delicate,
+    LaundryWasherMode.ModeTag.LowEnergy,
+    LaundryWasherMode.ModeTag.Heavy,
+    LaundryWasherMode.ModeTag.Max,
+  ];
+  return SelectLaundryWasherModeServerBase.set({
+    action,
+    supportedModes: displayOptions.map((label, mode) => ({
+      label,
+      mode,
+      modeTags: [{ value: tags[mode] ?? LaundryWasherMode.ModeTag.Normal }],
+    })),
+    currentMode: currentMode >= 0 ? currentMode : 0,
+  });
+}
+
 function buildSelectRvcRunModeServer(action: SelectAction) {
   const supportedModes = (state: HomeAssistantEntityState, agent: Agent) =>
     getDisplayOptions(state, agent).map((label, index) => ({
@@ -512,6 +608,16 @@ function selectStageProfile(
     };
     return dishwasher.with(
       buildSelectDishwasherModeServer(action, homeAssistantEntity),
+    );
+  }
+  if (profile === "laundry_washer") {
+    const washer = LaundryWasherEndpoint(
+      homeAssistantEntity,
+    ) as EndpointType & {
+      with(...behaviors: unknown[]): EndpointType;
+    };
+    return washer.with(
+      buildSelectLaundryWasherModeServer(action, homeAssistantEntity),
     );
   }
   if (profile === "robot_vacuum_cleaner") {

@@ -72,6 +72,20 @@ export class HomeAssistantEntityBehavior extends Behavior {
     actions.call(action, this.entityId);
   }
 
+  callActionForEntity(action: HomeAssistantAction, entityId: string) {
+    const actions = this.env.get(HomeAssistantActions);
+    const blocked =
+      actions.available === false ||
+      actions.isTargetBlocked?.(entityId) === true;
+    if (blocked && !transactionIsOffline(this.context)) {
+      throw new StatusResponseError(
+        "Home Assistant is not reachable",
+        StatusCode.Failure,
+      );
+    }
+    actions.call(action, entityId);
+  }
+
   fireEvent(eventType: string, eventData?: Record<string, unknown>) {
     const actions = this.env.get(HomeAssistantActions);
     actions.fireEvent(eventType, {

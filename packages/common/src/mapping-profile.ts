@@ -16,6 +16,8 @@ export interface MappingProfileEntry {
   readonly filterLifeEntity?: string;
   readonly cleaningModeEntity?: string;
   readonly temperatureEntity?: string;
+  readonly powerSwitchEntity?: string;
+  readonly operationalStateEntity?: string;
   readonly humidityEntity?: string;
   readonly pressureEntity?: string;
   readonly batteryEntity?: string;

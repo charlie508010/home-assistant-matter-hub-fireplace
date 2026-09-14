@@ -1,13 +1,22 @@
-import type { HomeAssistantEntityInformation } from "@home-assistant-matter-hub/common";
+import type {
+  HomeAssistantEntityInformation,
+  SensorDeviceAttributes,
+} from "@home-assistant-matter-hub/common";
 import type { EndpointType } from "@matter/main";
 import { OperationalStateServer as Base } from "@matter/main/behaviors/operational-state";
 import { OperationalState } from "@matter/main/clusters/operational-state";
-import { DishwasherDevice as Device } from "@matter/main/devices";
+import { DishwasherDevice, LaundryWasherDevice } from "@matter/main/devices";
+import { EntityStateProvider } from "../../../../services/bridges/entity-state-provider.js";
 import { applyPatchState } from "../../../../utils/apply-patch-state.js";
+import { Temperature } from "../../../../utils/converters/temperature.js";
 import { BasicInformationServer } from "../../../behaviors/basic-information-server.js";
 import { HomeAssistantEntityBehavior } from "../../../behaviors/home-assistant-entity-behavior.js";
 import { IdentifyServer } from "../../../behaviors/identify-server.js";
-import { OnOffServer } from "../../../behaviors/on-off-server.js";
+import {
+  defaultOnOffAction,
+  OnOffServer,
+} from "../../../behaviors/on-off-server.js";
+import { TemperatureMeasurementServer } from "../../../behaviors/temperature-measurement-server.js";
 
 const haStateToDishwasherState: Record<
   string,
@@ -49,7 +58,13 @@ class DishwasherOperationalStateServer extends Base {
     if (!entity.state) {
       return;
     }
-    const haState = entity.state.state?.toLowerCase() ?? "off";
+    const mapping = this.agent.get(HomeAssistantEntityBehavior).state.mapping;
+    const statusEntity =
+      mapping?.operationalStateEntity ?? mapping?.powerSwitchEntity;
+    const source = statusEntity
+      ? this.agent.env.get(EntityStateProvider).getState(statusEntity)
+      : entity.state;
+    const haState = source?.state?.toLowerCase() ?? "off";
     const newState =
       haStateToDishwasherState[haState] ??
       OperationalState.OperationalStateEnum.Stopped;
@@ -71,7 +86,13 @@ class DishwasherOperationalStateServer extends Base {
 
   override stop(): OperationalState.OperationalCommandResponse {
     const homeAssistant = this.agent.get(HomeAssistantEntityBehavior);
-    homeAssistant.callAction({ action: "homeassistant.turn_off" });
+    const target = homeAssistant.state.mapping?.powerSwitchEntity;
+    if (target) {
+      homeAssistant.callActionForEntity(
+        defaultOnOffAction(target, false),
+        target,
+      );
+    }
     return {
       commandResponseState: {
         errorStateId: OperationalState.ErrorState.NoError,
@@ -81,7 +102,13 @@ class DishwasherOperationalStateServer extends Base {
 
   override start(): OperationalState.OperationalCommandResponse {
     const homeAssistant = this.agent.get(HomeAssistantEntityBehavior);
-    homeAssistant.callAction({ action: "homeassistant.turn_on" });
+    const target = homeAssistant.state.mapping?.powerSwitchEntity;
+    if (target) {
+      homeAssistant.callActionForEntity(
+        defaultOnOffAction(target, true),
+        target,
+      );
+    }
     return {
       commandResponseState: {
         errorStateId: OperationalState.ErrorState.NoError,
@@ -94,25 +121,69 @@ class DishwasherOperationalStateServer extends Base {
   }
 }
 
-const DishwasherOnOffServer = OnOffServer({
-  turnOn: () => ({
-    action: "homeassistant.turn_on",
-  }),
-  turnOff: () => ({
-    action: "homeassistant.turn_off",
-  }),
-});
+function dishwasherOnOffServer(
+  homeAssistantEntity: HomeAssistantEntityBehavior.State,
+) {
+  const target = homeAssistantEntity.mapping?.powerSwitchEntity;
+  if (!target) {
+    return OnOffServer({
+      turnOn: () => ({ action: "homeassistant.turn_on" }),
+      turnOff: () => ({ action: "homeassistant.turn_off" }),
+    });
+  }
+  return OnOffServer({
+    targetEntity: target,
+    isOn: (_state, agent) => {
+      const mapped = agent.env.get(EntityStateProvider).getState(target);
+      return mapped?.state !== "off" && mapped?.state !== "unavailable";
+    },
+    turnOn: () => defaultOnOffAction(target, true),
+    turnOff: () => defaultOnOffAction(target, false),
+  });
+}
 
-const DishwasherDeviceType = Device.with(
-  BasicInformationServer,
-  IdentifyServer,
-  HomeAssistantEntityBehavior,
-  DishwasherOperationalStateServer,
-  DishwasherOnOffServer,
-);
+function applianceEndpoint(
+  device: typeof DishwasherDevice | typeof LaundryWasherDevice,
+  homeAssistantEntity: HomeAssistantEntityBehavior.State,
+): EndpointType {
+  let type = device.with(
+    BasicInformationServer,
+    IdentifyServer,
+    HomeAssistantEntityBehavior,
+    DishwasherOperationalStateServer,
+    dishwasherOnOffServer(homeAssistantEntity),
+  );
+
+  const temperatureEntity = homeAssistantEntity.mapping?.temperatureEntity;
+  if (temperatureEntity) {
+    type = type.with(
+      TemperatureMeasurementServer({
+        getValue: (_entity, agent) => {
+          const state = agent.env
+            .get(EntityStateProvider)
+            .getState(temperatureEntity);
+          if (!state || Number.isNaN(Number(state.state))) return undefined;
+          return Temperature.withUnit(
+            Number(state.state),
+            (state.attributes as SensorDeviceAttributes).unit_of_measurement ??
+              "°C",
+          );
+        },
+      }),
+    );
+  }
+
+  return type.set({ homeAssistantEntity } as never);
+}
 
 export function DishwasherEndpoint(
   homeAssistantEntity: HomeAssistantEntityBehavior.State,
 ): EndpointType {
-  return DishwasherDeviceType.set({ homeAssistantEntity });
+  return applianceEndpoint(DishwasherDevice, homeAssistantEntity);
+}
+
+export function LaundryWasherEndpoint(
+  homeAssistantEntity: HomeAssistantEntityBehavior.State,
+): EndpointType {
+  return applianceEndpoint(LaundryWasherDevice, homeAssistantEntity);
 }
