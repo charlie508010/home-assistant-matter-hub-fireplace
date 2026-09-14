@@ -127,7 +127,10 @@ describe("light with mapped ModeSelect", () => {
         Number(deviceType),
         revision,
       ]),
-    ).toEqual([[0x010d, 4]]);
+    ).toEqual([
+      [0x010d, 4],
+      [0x0027, 1],
+    ]);
     expect(endpoint.number).toBe(1);
     expect(endpoint.state.levelControl).toBeDefined();
     expect(endpoint.state.colorControl).toBeDefined();

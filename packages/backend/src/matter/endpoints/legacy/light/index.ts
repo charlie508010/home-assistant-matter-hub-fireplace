@@ -3,6 +3,8 @@ import {
   LightDeviceColorMode,
 } from "@home-assistant-matter-hub/common";
 import type { EndpointType } from "@matter/main";
+import { DescriptorServer } from "@matter/main/behaviors";
+import { DeviceTypeId } from "@matter/types";
 import { EntityStateProvider } from "../../../../services/bridges/entity-state-provider.js";
 import { HaElectricalEnergyMeasurementServer } from "../../../behaviors/electrical-energy-measurement-server.js";
 import { HaElectricalPowerMeasurementServer } from "../../../behaviors/electrical-power-measurement-server.js";
@@ -55,6 +57,11 @@ const LightModeSelectServer = ModeSelectServer({
   }),
 });
 
+const modeSelectDeviceType = {
+  deviceType: DeviceTypeId(0x0027),
+  revision: 1,
+};
+
 export function LightDevice(
   homeAssistantEntity: HomeAssistantEntityBehavior.State,
 ): EndpointType {
@@ -89,11 +96,9 @@ export function LightDevice(
   // ColorTemperatureLightDevice has issues with Matter.js initialization that cause
   // "Behaviors have errors" during endpoint creation. ExtendedColorLight works correctly
   // with just the ColorTemperature feature enabled (supportsColorControl=false).
-  // Alexa maps Mode Select to Alexa.ModeController only for selected primary
-  // device types such as a lamp. Certified Govee lamps expose ModeSelect as an
-  // additional cluster on one ExtendedColorLight endpoint; they do not add the
-  // standalone ModeSelect (0x0027) device type to DeviceTypeList. Mirror that
-  // topology here when a light has a mapped mode selector.
+  // Keep the mapped mode and all light controls on one endpoint. The endpoint
+  // advertises both device types below so ModeSelect is not an undeclared extra
+  // cluster that strict controllers such as Alexa may ignore.
   const deviceType = hasModeSelect
     ? ExtendedColorLightType(true, true, hasBattery)
     : supportsColorControl || supportsColorTemperature
@@ -131,7 +136,16 @@ export function LightDevice(
   }
 
   if (hasModeSelect) {
-    device = device.with(LightModeSelectServer).set({
+    device = device.with(DescriptorServer, LightModeSelectServer).set({
+      descriptor: {
+        deviceTypeList: [
+          {
+            deviceType: deviceType.deviceType,
+            revision: deviceType.deviceRevision,
+          },
+          modeSelectDeviceType,
+        ],
+      },
       modeSelect: {
         description: homeAssistantEntity.mapping?.modeSelectName ?? "Stufe",
         supportedModes: buildSupportedModes(modeSelectOptions),
