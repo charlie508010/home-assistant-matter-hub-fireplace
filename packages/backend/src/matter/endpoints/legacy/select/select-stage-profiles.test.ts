@@ -85,7 +85,16 @@ function selectEntity(): HomeAssistantEntityInformation {
 }
 
 async function mount(
-  matterDeviceType: "mode_select" | "speaker" | "basic_video_player" | "fan",
+  matterDeviceType:
+    | "mode_select"
+    | "speaker"
+    | "basic_video_player"
+    | "fan"
+    | "air_purifier"
+    | "on_off_light"
+    | "dishwasher"
+    | "robot_vacuum_cleaner"
+    | "window_covering",
   customName: string,
 ) {
   const mapping: EntityMappingConfig = {
@@ -209,6 +218,103 @@ describe("select Matter stage compatibility profiles", () => {
       expect(a.fanControl.state.speedCurrent).toBe(2);
       const action = a.fanControl.state.config.turnOn(80, a);
       a.homeAssistantEntity.callAction(action);
+    });
+    expect(selectedOptions()).toContain("C4");
+  });
+
+  it("exposes an Air Purifier with six discrete speeds", async () => {
+    const endpoint = await mount("air_purifier", "Flammenfarbe Luftreiniger");
+    await endpoint.act((agent) => {
+      // biome-ignore lint/suspicious/noExplicitAny: inspect live Matter state
+      const a = agent as any;
+      expect(
+        a.descriptor.state.deviceTypeList.map((entry: { deviceType: number }) =>
+          Number(entry.deviceType),
+        ),
+      ).toContain(0x002d);
+      expect(a.fanControl.state.speedMax).toBe(5);
+      expect(a.fanControl.state.speedCurrent).toBe(2);
+      a.homeAssistantEntity.callAction(a.fanControl.state.config.turnOn(60, a));
+    });
+    expect(selectedOptions()).toContain("C3");
+  });
+
+  it("exposes a light carrying a Mode Select cluster and device type", async () => {
+    const endpoint = await mount("on_off_light", "Flammenfarbe Lampe Modus");
+    await endpoint.act((agent) => {
+      // biome-ignore lint/suspicious/noExplicitAny: inspect live Matter state
+      const a = agent as any;
+      const deviceTypes = a.descriptor.state.deviceTypeList.map(
+        (entry: { deviceType: number }) => Number(entry.deviceType),
+      );
+      expect(deviceTypes).toContain(0x0100);
+      expect(deviceTypes).toContain(0x0027);
+      expect(
+        a.modeSelect.state.supportedModes.map(
+          (mode: { label: string }) => mode.label,
+        ),
+      ).toEqual(LABELS);
+      a.modeSelect.changeToMode({ newMode: 3 });
+    });
+    expect(selectedOptions()).toContain("C3");
+  });
+
+  it("exposes six Dishwasher Mode choices", async () => {
+    const endpoint = await mount("dishwasher", "Flammenfarbe Spuelmaschine");
+    await endpoint.act(async (agent) => {
+      // biome-ignore lint/suspicious/noExplicitAny: inspect live Matter state
+      const a = agent as any;
+      expect(
+        a.descriptor.state.deviceTypeList.map((entry: { deviceType: number }) =>
+          Number(entry.deviceType),
+        ),
+      ).toContain(0x0075);
+      expect(
+        a.dishwasherMode.state.supportedModes.map(
+          (mode: { label: string }) => mode.label,
+        ),
+      ).toEqual(LABELS);
+      await a.dishwasherMode.changeToMode({ newMode: 4 });
+    });
+    expect(selectedOptions()).toContain("C4");
+  });
+
+  it("exposes six RVC Run Mode choices", async () => {
+    const endpoint = await mount(
+      "robot_vacuum_cleaner",
+      "Flammenfarbe Saugroboter",
+    );
+    await endpoint.act(async (agent) => {
+      // biome-ignore lint/suspicious/noExplicitAny: inspect live Matter state
+      const a = agent as any;
+      expect(
+        a.descriptor.state.deviceTypeList.map((entry: { deviceType: number }) =>
+          Number(entry.deviceType),
+        ),
+      ).toContain(0x0074);
+      expect(
+        a.rvcRunMode.state.supportedModes.map(
+          (mode: { label: string }) => mode.label,
+        ),
+      ).toEqual(LABELS);
+      await a.rvcRunMode.changeToMode({ newMode: 102 });
+    });
+    expect(selectedOptions()).toContain("C3");
+  });
+
+  it("exposes a Window Covering position snapped to six stages", async () => {
+    const endpoint = await mount("window_covering", "Flammenfarbe Fenster");
+    await endpoint.act((agent) => {
+      // biome-ignore lint/suspicious/noExplicitAny: inspect live Matter state
+      const a = agent as any;
+      expect(
+        a.descriptor.state.deviceTypeList.map((entry: { deviceType: number }) =>
+          Number(entry.deviceType),
+        ),
+      ).toContain(0x0202);
+      a.homeAssistantEntity.callAction(
+        a.windowCovering.state.config.setLiftPosition(80, a),
+      );
     });
     expect(selectedOptions()).toContain("C4");
   });

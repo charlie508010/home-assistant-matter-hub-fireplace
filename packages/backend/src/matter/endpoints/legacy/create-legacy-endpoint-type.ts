@@ -139,7 +139,12 @@ export function createLegacyEndpointType(
     (mapping?.matterDeviceType === "mode_select" ||
       mapping?.matterDeviceType === "speaker" ||
       mapping?.matterDeviceType === "basic_video_player" ||
-      mapping?.matterDeviceType === "fan");
+      mapping?.matterDeviceType === "fan" ||
+      mapping?.matterDeviceType === "air_purifier" ||
+      mapping?.matterDeviceType === "on_off_light" ||
+      mapping?.matterDeviceType === "dishwasher" ||
+      mapping?.matterDeviceType === "robot_vacuum_cleaner" ||
+      mapping?.matterDeviceType === "window_covering");
 
   if (mapping?.matterDeviceType && !isSelectSwitch && !isSelectStageProfile) {
     const overrideFactory = matterDeviceTypeFactories[mapping.matterDeviceType];

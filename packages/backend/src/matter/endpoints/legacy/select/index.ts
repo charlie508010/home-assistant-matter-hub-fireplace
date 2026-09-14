@@ -3,16 +3,33 @@ import type {
   HomeAssistantEntityState,
 } from "@home-assistant-matter-hub/common";
 import type { Agent, EndpointType } from "@matter/main";
-import { GroupsServer, ScenesManagementServer } from "@matter/main/behaviors";
-import { FanControl } from "@matter/main/clusters";
 import {
+  DescriptorServer,
+  GroupsServer,
+  ScenesManagementServer,
+} from "@matter/main/behaviors";
+import { DishwasherModeServer as BaseDishwasherModeServer } from "@matter/main/behaviors/dishwasher-mode";
+import {
+  DishwasherMode,
+  FanControl,
+  RvcOperationalState,
+  RvcRunMode,
+  WindowCovering,
+} from "@matter/main/clusters";
+import { ModeBase } from "@matter/main/clusters/mode-base";
+import {
+  AirPurifierDevice,
   BasicVideoPlayerDevice,
   FanDevice as MatterFanDevice,
   ModeSelectDevice,
   OnOffLightDevice,
   OnOffPlugInUnitDevice,
+  RoboticVacuumCleanerDevice,
   SpeakerDevice,
+  WindowCoveringDevice,
 } from "@matter/main/devices";
+import { DeviceTypeId } from "@matter/types";
+import { applyPatchState } from "../../../../utils/apply-patch-state.js";
 import { BasicInformationServer } from "../../../behaviors/basic-information-server.js";
 import { FanControlServer } from "../../../behaviors/fan-control-server.js";
 import { HomeAssistantEntityBehavior } from "../../../behaviors/home-assistant-entity-behavior.js";
@@ -23,9 +40,17 @@ import {
   ModeSelectServer,
 } from "../../../behaviors/mode-select-server.js";
 import { OnOffServer } from "../../../behaviors/on-off-server.js";
+import { RvcOperationalStateServer } from "../../../behaviors/rvc-operational-state-server.js";
+import {
+  RvcRunModeServer,
+  RvcSupportedRunMode,
+} from "../../../behaviors/rvc-run-mode-server.js";
 import { SpeakerLevelControlServer } from "../../../behaviors/speaker-level-control-server.js";
+import { WindowCoveringServer } from "../../../behaviors/window-covering-server.js";
+import { DishwasherEndpoint } from "../dishwasher/index.js";
 import { MediaPlayerKeypadInputServer } from "../media-player/behaviors/media-player-keypad-input-server.js";
 import { MediaPlayerMediaPlaybackServer } from "../media-player/behaviors/media-player-media-playback-server.js";
+import { createDefaultRvcCleanModeServer } from "../vacuum/behaviors/vacuum-rvc-clean-mode-server.js";
 
 interface SelectAttributes {
   options?: string[];
@@ -174,6 +199,265 @@ function buildSelectFanControlServer(action: SelectAction) {
   }).with("Step", "MultiSpeed");
 }
 
+const modeSelectDeviceType = {
+  deviceType: DeviceTypeId(0x0027),
+  revision: 1,
+};
+
+function buildSelectLampModeDevice(
+  homeAssistantEntity: HomeAssistantEntityBehavior.State,
+  action: SelectAction,
+) {
+  const state = homeAssistantEntity.entity.state;
+  const options = getStateOptions(state);
+  const labels = homeAssistantEntity.mapping?.modeSelectOptions;
+  const displayOptions = labels?.length === options.length ? labels : options;
+  const current = options.findIndex(
+    (option) => option.toLowerCase() === state.state?.toLowerCase(),
+  );
+
+  return OnOffLightDevice.with(
+    BasicInformationServer,
+    IdentifyServer,
+    HomeAssistantEntityBehavior,
+    GroupsServer,
+    ScenesManagementServer,
+    buildStageOnOffServer(action),
+    DescriptorServer,
+    buildSelectModeServer(action),
+  ).set({
+    homeAssistantEntity,
+    descriptor: {
+      deviceTypeList: [
+        {
+          deviceType: OnOffLightDevice.deviceType,
+          revision: OnOffLightDevice.deviceRevision,
+        },
+        modeSelectDeviceType,
+      ],
+    },
+    modeSelect: {
+      description: homeAssistantEntity.customName ?? "Flammenfarbe",
+      supportedModes: buildSupportedModes(displayOptions),
+      currentMode: current >= 0 ? current : 0,
+    },
+  });
+}
+
+function dishwasherModes(state: HomeAssistantEntityState, agent: Agent) {
+  const labels = getDisplayOptions(state, agent);
+  const tags = [
+    DishwasherMode.ModeTag.Normal,
+    DishwasherMode.ModeTag.Light,
+    DishwasherMode.ModeTag.Quick,
+    DishwasherMode.ModeTag.LowEnergy,
+    DishwasherMode.ModeTag.Heavy,
+    DishwasherMode.ModeTag.Max,
+  ];
+  return labels.map((label, mode) => ({
+    label,
+    mode,
+    modeTags: [{ value: tags[mode] ?? DishwasherMode.ModeTag.Normal }],
+  }));
+}
+
+// biome-ignore lint/correctness/noUnusedVariables: Used by the factory below
+class SelectDishwasherModeServerBase extends BaseDishwasherModeServer {
+  declare state: SelectDishwasherModeServerBase.State;
+
+  override async initialize() {
+    await super.initialize();
+    const homeAssistant = await this.agent.load(HomeAssistantEntityBehavior);
+    this.update(homeAssistant.entity);
+    this.reactTo(homeAssistant.onChange, this.update, {
+      offline: true,
+      lock: true,
+    });
+  }
+
+  private update(entity: HomeAssistantEntityInformation) {
+    const options = getSelectOptions(entity);
+    if (options.length === 0) return;
+    const currentMode = options.findIndex(
+      (option) => option.toLowerCase() === entity.state.state?.toLowerCase(),
+    );
+    applyPatchState(this.state, {
+      supportedModes: dishwasherModes(entity.state, this.agent),
+      currentMode: currentMode >= 0 ? currentMode : 0,
+    });
+  }
+
+  override async changeToMode(request: ModeBase.ChangeToModeRequest) {
+    const result = await super.changeToMode(request);
+    if (result.status === ModeBase.ModeChangeStatus.Success) {
+      const homeAssistant = this.agent.get(HomeAssistantEntityBehavior);
+      const option = getSelectOptions(homeAssistant.entity)[request.newMode];
+      if (option !== undefined) {
+        homeAssistant.callAction(selectOptionAction(this.state.action, option));
+      }
+    }
+    return result;
+  }
+}
+
+namespace SelectDishwasherModeServerBase {
+  export class State extends BaseDishwasherModeServer.State {
+    action!: SelectAction;
+  }
+}
+
+function buildSelectDishwasherModeServer(
+  action: SelectAction,
+  homeAssistantEntity: HomeAssistantEntityBehavior.State,
+) {
+  const state = homeAssistantEntity.entity.state;
+  const options = getStateOptions(state);
+  const currentMode = options.findIndex(
+    (option) => option.toLowerCase() === state.state?.toLowerCase(),
+  );
+  const labels = homeAssistantEntity.mapping?.modeSelectOptions;
+  const displayOptions = labels?.length === options.length ? labels : options;
+  return SelectDishwasherModeServerBase.set({
+    action,
+    supportedModes: displayOptions.map((label, mode) => ({
+      label,
+      mode,
+      modeTags: [
+        {
+          value:
+            [
+              DishwasherMode.ModeTag.Normal,
+              DishwasherMode.ModeTag.Light,
+              DishwasherMode.ModeTag.Quick,
+              DishwasherMode.ModeTag.LowEnergy,
+              DishwasherMode.ModeTag.Heavy,
+              DishwasherMode.ModeTag.Max,
+            ][mode] ?? DishwasherMode.ModeTag.Normal,
+        },
+      ],
+    })),
+    currentMode: currentMode >= 0 ? currentMode : 0,
+  });
+}
+
+function buildSelectRvcRunModeServer(action: SelectAction) {
+  const supportedModes = (state: HomeAssistantEntityState, agent: Agent) =>
+    getDisplayOptions(state, agent).map((label, index) => ({
+      label,
+      mode: index <= 1 ? index : index + 99,
+      modeTags: [
+        {
+          value:
+            index === 0 ? RvcRunMode.ModeTag.Idle : RvcRunMode.ModeTag.Cleaning,
+        },
+      ],
+    }));
+  const currentMode = (state: HomeAssistantEntityState) => {
+    const options = getStateOptions(state);
+    const index = options.findIndex(
+      (option) => option.toLowerCase() === state.state?.toLowerCase(),
+    );
+    return index < 0
+      ? RvcSupportedRunMode.Idle
+      : index <= 1
+        ? index
+        : index + 99;
+  };
+  return RvcRunModeServer(
+    {
+      getCurrentMode: currentMode,
+      getSupportedModes: supportedModes,
+      start: (_, agent) => {
+        const options = getStateOptions(
+          agent.get(HomeAssistantEntityBehavior).entity.state,
+        );
+        return selectOptionAction(action, options[1] ?? options[0] ?? "");
+      },
+      returnToBase: (_, agent) =>
+        selectOptionAction(
+          action,
+          getStateOptions(
+            agent.get(HomeAssistantEntityBehavior).entity.state,
+          )[0] ?? "",
+        ),
+      pause: (_, agent) => currentStageAction(action, agent),
+      cleanRoom: (mode, agent) =>
+        selectOptionAction(
+          action,
+          getStateOptions(agent.get(HomeAssistantEntityBehavior).entity.state)[
+            mode <= 1 ? mode : mode - 99
+          ] ?? "",
+        ),
+    },
+    {
+      supportedModes: [
+        {
+          label: "Stufe 0",
+          mode: 0,
+          modeTags: [{ value: RvcRunMode.ModeTag.Idle }],
+        },
+        {
+          label: "Stufe 1",
+          mode: 1,
+          modeTags: [{ value: RvcRunMode.ModeTag.Cleaning }],
+        },
+      ],
+      currentMode: 0,
+    },
+  );
+}
+
+function buildSelectRvcOperationalStateServer(action: SelectAction) {
+  return RvcOperationalStateServer({
+    getOperationalState: (state) =>
+      currentPercent(state) === 0
+        ? RvcOperationalState.OperationalState.Stopped
+        : RvcOperationalState.OperationalState.Running,
+    pause: (_, agent) => currentStageAction(action, agent),
+    resume: (_, agent) => currentStageAction(action, agent),
+    goHome: (_, agent) =>
+      selectOptionAction(
+        action,
+        getStateOptions(
+          agent.get(HomeAssistantEntityBehavior).entity.state,
+        )[0] ?? "",
+      ),
+  });
+}
+
+function buildSelectWindowCoveringServer(action: SelectAction) {
+  return WindowCoveringServer({
+    getCurrentLiftPosition: currentPercent,
+    getCurrentTiltPosition: () => null,
+    getMovementStatus: () => WindowCovering.MovementStatus.Stopped,
+    stopCover: (_, agent) => currentStageAction(action, agent),
+    openCoverLift: (_, agent) => {
+      const options = getStateOptions(
+        agent.get(HomeAssistantEntityBehavior).entity.state,
+      );
+      return selectOptionAction(action, options.at(-1) ?? "");
+    },
+    closeCoverLift: (_, agent) =>
+      selectOptionAction(
+        action,
+        getStateOptions(
+          agent.get(HomeAssistantEntityBehavior).entity.state,
+        )[0] ?? "",
+      ),
+    setLiftPosition: (position, agent) =>
+      selectOptionAction(
+        action,
+        optionAtPercent(
+          agent.get(HomeAssistantEntityBehavior).entity.state,
+          position,
+        ),
+      ),
+    openCoverTilt: (_, agent) => currentStageAction(action, agent),
+    closeCoverTilt: (_, agent) => currentStageAction(action, agent),
+    setTiltPosition: (_, agent) => currentStageAction(action, agent),
+  });
+}
+
 function selectStageProfile(
   homeAssistantEntity: HomeAssistantEntityBehavior.State,
   action: SelectAction,
@@ -206,6 +490,46 @@ function selectStageProfile(
       GroupsServer,
       buildStageOnOffServer(action),
       buildSelectFanControlServer(action),
+    ).set({ homeAssistantEntity });
+  }
+  if (profile === "air_purifier") {
+    return AirPurifierDevice.with(
+      BasicInformationServer,
+      IdentifyServer,
+      HomeAssistantEntityBehavior,
+      buildStageOnOffServer(action),
+      buildSelectFanControlServer(action),
+    ).set({ homeAssistantEntity });
+  }
+  if (profile === "on_off_light") {
+    return buildSelectLampModeDevice(homeAssistantEntity, action);
+  }
+  if (profile === "dishwasher") {
+    const dishwasher = DishwasherEndpoint(
+      homeAssistantEntity,
+    ) as EndpointType & {
+      with(...behaviors: unknown[]): EndpointType;
+    };
+    return dishwasher.with(
+      buildSelectDishwasherModeServer(action, homeAssistantEntity),
+    );
+  }
+  if (profile === "robot_vacuum_cleaner") {
+    return RoboticVacuumCleanerDevice.with(
+      BasicInformationServer,
+      IdentifyServer,
+      HomeAssistantEntityBehavior,
+      buildSelectRvcRunModeServer(action),
+      buildSelectRvcOperationalStateServer(action),
+      createDefaultRvcCleanModeServer(),
+    ).set({ homeAssistantEntity });
+  }
+  if (profile === "window_covering") {
+    return WindowCoveringDevice.with(
+      BasicInformationServer,
+      IdentifyServer,
+      HomeAssistantEntityBehavior,
+      buildSelectWindowCoveringServer(action),
     ).set({ homeAssistantEntity });
   }
   return undefined;
