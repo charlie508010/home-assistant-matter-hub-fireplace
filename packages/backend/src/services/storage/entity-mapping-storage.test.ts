@@ -117,6 +117,30 @@ describe("EntityMappingStorage orphan tombstone", () => {
     });
   });
 
+  it("normalizes custom names of composed sub-endpoints", async () => {
+    const storage = new EntityMappingStorage(appStorage);
+    await storage.construction;
+    await storage.setMapping({
+      bridgeId: "b",
+      entityId: "light.kamin",
+      composedEntities: [
+        {
+          entityId: " select.kamin_matter_flammenhelligkeit ",
+          matterDeviceType: "mode_select",
+          customName: " Flammenhelligkeit ",
+        },
+      ],
+    });
+
+    expect(storage.getMapping("b", "light.kamin")?.composedEntities).toEqual([
+      {
+        entityId: "select.kamin_matter_flammenhelligkeit",
+        matterDeviceType: "mode_select",
+        customName: "Flammenhelligkeit",
+      },
+    ]);
+  });
+
   // #443: the new per-entity fan debounce field must survive the storage
   // normalizer and a flushed reload like every other mapping field.
   it("persists fanSliderDebounceMs and round-trips it through a reload", async () => {

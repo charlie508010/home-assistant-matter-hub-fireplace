@@ -229,8 +229,13 @@ export class EntityMappingStorage extends Service {
       climateExposeFan: request.climateExposeFan || undefined,
       climateAutoMode: request.climateAutoMode || undefined,
       composedEntities:
-        request.composedEntities?.filter((e) => e.entityId?.trim()) ??
-        undefined,
+        request.composedEntities
+          ?.filter((e) => e.entityId?.trim())
+          .map((e) => ({
+            entityId: e.entityId.trim(),
+            matterDeviceType: e.matterDeviceType,
+            customName: e.customName?.trim() || undefined,
+          })) ?? undefined,
       disableMomentaryFlip: request.disableMomentaryFlip || undefined,
     };
 

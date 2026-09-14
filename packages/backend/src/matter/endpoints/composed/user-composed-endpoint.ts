@@ -239,6 +239,7 @@ export class UserComposedEndpoint extends Endpoint {
       const subMapping: EntityMappingConfig = {
         entityId: sub.entityId,
         matterDeviceType: sub.matterDeviceType,
+        customName: sub.customName?.trim() || undefined,
       };
 
       const subType = createLegacyEndpointType(

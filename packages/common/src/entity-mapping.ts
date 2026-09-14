@@ -60,6 +60,8 @@ export type MatterDeviceType =
 export interface ComposedSubEntity {
   readonly entityId: string;
   readonly matterDeviceType?: MatterDeviceType;
+  /** Optional controller-facing name for this sub-endpoint. */
+  readonly customName?: string;
 }
 
 export type ClimateAutoMode = "heat" | "cool";

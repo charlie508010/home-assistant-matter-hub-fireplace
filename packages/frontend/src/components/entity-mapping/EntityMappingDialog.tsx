@@ -1681,6 +1681,21 @@ export function EntityMappingDialog({
                   placeholder="sensor.temperature"
                 />
               </Box>
+              <TextField
+                size="small"
+                sx={{ flex: 1, mt: 1 }}
+                value={sub.customName || ""}
+                label="Name"
+                placeholder="Flammenhelligkeit"
+                onChange={(e) => {
+                  const updated = [...composedEntities];
+                  updated[index] = {
+                    ...sub,
+                    customName: e.target.value || undefined,
+                  };
+                  setComposedEntities(updated);
+                }}
+              />
               <FormControl size="small" sx={{ flex: 1, mt: 1 }}>
                 <InputLabel>Device Type</InputLabel>
                 <Select
