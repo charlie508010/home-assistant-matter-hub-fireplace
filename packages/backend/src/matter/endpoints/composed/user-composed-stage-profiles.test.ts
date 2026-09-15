@@ -163,7 +163,7 @@ describe("composed select stage compatibility profiles", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("combines a Laundry Washer parent with power and temperature children", async () => {
+  it("mounts a standalone Laundry Washer with power and temperature children in server mode", async () => {
     const states: Record<string, HomeAssistantEntityState> = {
       [SELECT]: state(SELECT, "C2", {
         friendly_name: "Flammenfarbe",
@@ -210,6 +210,7 @@ describe("composed select stage compatibility profiles", () => {
         },
       ],
       customName: "Kamin Washer Multi",
+      standalone: true,
     });
 
     expect(endpoint).toBeDefined();
@@ -247,9 +248,7 @@ describe("composed select stage compatibility profiles", () => {
       commissioning: { passcode: 20202021, discriminator: 3840 },
       basicInformation: { vendorId: VendorId(0xfff1), productId: 0x8000 },
     });
-    const aggregator = new AggregatorEndpoint("aggregator");
-    await server.add(aggregator);
-    await aggregator.add(endpoint!);
+    await server.add(endpoint!);
 
     await endpoint!.act((agent) => {
       // biome-ignore lint/suspicious/noExplicitAny: inspect live Matter state

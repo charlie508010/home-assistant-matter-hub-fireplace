@@ -16,6 +16,7 @@ import { HomeAssistantEntityBehavior } from "../../behaviors/home-assistant-enti
 import { IdentifyServer } from "../../behaviors/identify-server.js";
 import { DefaultPowerSourceServer } from "../../behaviors/power-source-server.js";
 import { createLegacyEndpointType } from "../legacy/create-legacy-endpoint-type.js";
+import { asStandaloneEndpointType } from "../standalone-endpoint-type.js";
 import { updateEntityState } from "../update-entity-state.js";
 
 const logger = Logger.get("UserComposedEndpoint");
@@ -72,6 +73,10 @@ export interface UserComposedConfig {
   // Identity anchor (the primary's seed entity_id) so the parent freezes
   // uniqueId/serialNumber across a rename of the primary (#404).
   identityAnchor?: string;
+  // Server-mode nodes mount the primary directly below the root. In that
+  // shape the primary must not carry BridgedDeviceBasicInformation, while its
+  // composed parts remain normal child endpoints.
+  standalone?: boolean;
 }
 
 /**
@@ -204,6 +209,10 @@ export class UserComposedEndpoint extends Endpoint {
       parentType = parentType.with(
         DefaultPowerSourceServer,
       ) as MutableEndpointType;
+    }
+
+    if (config.standalone) {
+      parentType = asStandaloneEndpointType(parentType) as MutableEndpointType;
     }
 
     if (!primaryOnParent) {

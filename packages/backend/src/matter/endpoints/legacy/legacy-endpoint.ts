@@ -391,9 +391,37 @@ export class LegacyEndpoint extends EntityEndpoint {
       }
     }
 
-    // Composed shapes build a BridgedNodeEndpoint parent, which must not sit
-    // directly under a server-mode root. In standalone mode they are skipped
-    // and the entity falls through to a flat endpoint (#301).
+    // A server-mode node can expose a composed endpoint when the primary is
+    // merged onto the parent. The parent is converted to a standalone type;
+    // its power/temperature parts stay real Matter child endpoints.
+    if (
+      standalone &&
+      registry.isAutoComposedDevicesEnabled() &&
+      registry.isComposedPrimaryOnParentEnabled() &&
+      effectiveMapping?.composedEntities &&
+      effectiveMapping.composedEntities.length > 0
+    ) {
+      const composed = await UserComposedEndpoint.create({
+        registry,
+        primaryEntityId: entityId,
+        mapping: effectiveMapping,
+        composedEntities: effectiveMapping.composedEntities,
+        customName: effectiveMapping.customName,
+        areaName: registry.getAreaName(entityId),
+        endpointId,
+        identityAnchor,
+        standalone: true,
+      });
+      if (composed) {
+        return composed as unknown as LegacyEndpoint;
+      }
+      logger.warn(
+        `Server-mode composed device creation failed for ${entityId}, falling back to a flat endpoint`,
+      );
+    }
+
+    // The legacy BridgedNode parent cannot sit directly under a server-mode
+    // root. Without composedPrimaryOnParent, retain the safe flat fallback.
     if (
       standalone &&
       ((effectiveMapping?.composedEntities?.length ?? 0) > 0 ||
