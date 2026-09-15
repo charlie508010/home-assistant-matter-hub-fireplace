@@ -5,6 +5,7 @@ export type MatterDeviceType =
   | "air_quality_sensor"
   | "dishwasher"
   | "laundry_washer"
+  | "oven_stage_test"
   | "basic_video_player"
   | "battery_storage"
   | "carbon_monoxide_sensor"
@@ -575,6 +576,7 @@ export const matterDeviceTypeLabels: Record<MatterDeviceType, string> = {
   contact_sensor: "Contact Sensor",
   dishwasher: "Dishwasher",
   laundry_washer: "Laundry Washer",
+  oven_stage_test: "Oven Mode stage test (virtual cavity)",
   dimmable_light: "Dimmable Light",
   dimmable_plugin_unit: "Dimmable Plug-in Unit",
   door_lock: "Door Lock",
@@ -734,6 +736,13 @@ export const matterDeviceTypeControllerSupport: Record<
     alexa: "unknown",
     aqara: "unknown",
     note: "Matter Laundry Washer (0x0073) with washer mode, operational state and optional power.",
+  },
+  oven_stage_test: {
+    apple: "unknown",
+    google: "unknown",
+    alexa: "unknown",
+    aqara: "unknown",
+    note: "Experimental virtual Oven with an Oven Mode cavity. Controller support is not proven.",
   },
   speaker: {
     apple: "no",

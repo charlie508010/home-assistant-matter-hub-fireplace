@@ -45,6 +45,7 @@ import {
   MediaPlayerDevice,
   SpeakerMediaPlayerDevice,
 } from "./media-player/index.js";
+import { OvenStageTestDevice } from "./oven/oven-stage-test.js";
 import { PumpEndpoint } from "./pump/index.js";
 import { RemoteDevice } from "./remote/index.js";
 import { SceneDevice } from "./scene/index.js";
@@ -391,6 +392,7 @@ const matterDeviceTypeFactories: Partial<
   rain_sensor: (ha) => RainSensorType.set({ homeAssistantEntity: ha }),
   water_heater: WaterHeaterDevice,
   water_heater_management: WaterHeaterManagementDevice,
+  oven_stage_test: OvenStageTestDevice,
   generic_switch: EventDevice,
   doorbell: DoorbellDevice,
   smoke_co_alarm: (ha) => SmokeAlarmType.set({ homeAssistantEntity: ha }),
