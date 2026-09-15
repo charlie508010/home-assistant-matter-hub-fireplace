@@ -263,9 +263,10 @@ export class UserComposedEndpoint extends Endpoint {
         matterDeviceType: sub.matterDeviceType,
         customName: sub.customName?.trim() || undefined,
         modeSelectOptions:
-          sub.entityId === config.mapping?.modeSelectEntity
+          sub.modeSelectOptions ??
+          (sub.entityId === config.mapping?.modeSelectEntity
             ? config.mapping.modeSelectOptions
-            : undefined,
+            : undefined),
       };
 
       const occurrence = entityOccurrences.get(sub.entityId) ?? 0;

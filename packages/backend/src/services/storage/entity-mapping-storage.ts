@@ -238,6 +238,10 @@ export class EntityMappingStorage extends Service {
             entityId: e.entityId.trim(),
             matterDeviceType: e.matterDeviceType,
             customName: e.customName?.trim() || undefined,
+            modeSelectOptions:
+              e.modeSelectOptions
+                ?.map((option) => option.trim())
+                .filter(Boolean) || undefined,
           })) ?? undefined,
       disableMomentaryFlip: request.disableMomentaryFlip || undefined,
     };

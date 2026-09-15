@@ -207,8 +207,14 @@ describe("SelectDevice / InputSelectDevice ModeSelect labels (#296)", () => {
     expect(flameMode.description).toBe("Flamme");
     expect(heatMode.supportedModes.map((mode) => mode.label)).toEqual(labels);
     expect(flameMode.supportedModes.map((mode) => mode.label)).toEqual(labels);
-    expect(heatMode.currentMode).toBe(1);
-    expect(flameMode.currentMode).toBe(3);
+    expect(heatMode.supportedModes.map((mode) => mode.mode)).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
+    expect(flameMode.supportedModes.map((mode) => mode.mode)).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
+    expect(heatMode.currentMode).toBe(2);
+    expect(flameMode.currentMode).toBe(4);
   });
 
   it("returns undefined when options are missing", () => {

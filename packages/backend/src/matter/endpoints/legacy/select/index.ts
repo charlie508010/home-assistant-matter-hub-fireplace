@@ -71,11 +71,34 @@ function getSelectOptions(entity: HomeAssistantEntityInformation): string[] {
   return getStateOptions(entity.state);
 }
 
-function getDisplayOptions(state: HomeAssistantEntityState, agent: Agent) {
+function includesOption(options: string[], value: string) {
+  return options.some((option) => option.toLowerCase() === value.toLowerCase());
+}
+
+function getMatterOptions(state: HomeAssistantEntityState, agent?: Agent) {
   const options = getStateOptions(state);
+  const mappedOptions = agent?.get(HomeAssistantEntityBehavior).state.mapping
+    ?.modeSelectOptions;
+  if (
+    mappedOptions?.length &&
+    mappedOptions.every((option) => includesOption(options, option))
+  ) {
+    return mappedOptions;
+  }
+  return options;
+}
+
+function getDisplayOptions(state: HomeAssistantEntityState, agent: Agent) {
+  const options = getMatterOptions(state, agent);
   const labels = agent.get(HomeAssistantEntityBehavior).state.mapping
     ?.modeSelectOptions;
-  return labels?.length === options.length ? labels : options;
+  if (
+    labels?.length === options.length &&
+    !labels.every((label) => includesOption(options, label))
+  ) {
+    return labels;
+  }
+  return options;
 }
 
 function selectOptionAction(action: SelectAction, option: string) {
@@ -102,13 +125,8 @@ function currentPercent(state: HomeAssistantEntityState) {
 
 function buildSelectModeServer(action: string) {
   return ModeSelectServer({
-    getOptions: getSelectOptions,
-    getLabels: (entity, agent) => {
-      const options = getSelectOptions(entity);
-      const labels = agent.get(HomeAssistantEntityBehavior).state.mapping
-        ?.modeSelectOptions;
-      return labels?.length === options.length ? labels : options;
-    },
+    getOptions: (entity, agent) => getMatterOptions(entity.state, agent),
+    getLabels: (entity, agent) => getDisplayOptions(entity.state, agent),
     getCurrentOption: (entity) => entity.state.state ?? undefined,
     selectOption: (option) => ({
       action,
@@ -759,13 +777,26 @@ export function SelectDevice(
     return undefined;
   }
 
+  const mappedOptions = homeAssistantEntity.mapping?.modeSelectOptions;
+  const exposedOptions =
+    mappedOptions?.length &&
+    mappedOptions.every((option) => includesOption(options, option))
+      ? mappedOptions
+      : options;
+  const labels = homeAssistantEntity.mapping?.modeSelectOptions;
+  const displayOptions =
+    labels?.length === exposedOptions.length &&
+    !labels.every((label) => includesOption(exposedOptions, label))
+      ? labels
+      : exposedOptions;
+  const supportedModes = buildSupportedModes(displayOptions);
+
   const currentOption = homeAssistantEntity.entity.state.state;
   const currentIndex = currentOption
-    ? options.findIndex((o) => o.toLowerCase() === currentOption.toLowerCase())
+    ? exposedOptions.findIndex(
+        (o) => o.toLowerCase() === currentOption.toLowerCase(),
+      )
     : 0;
-
-  const labels = homeAssistantEntity.mapping?.modeSelectOptions;
-  const displayOptions = labels?.length === options.length ? labels : options;
 
   return SelectEndpointType.set({
     homeAssistantEntity,
@@ -778,8 +809,11 @@ export function SelectDevice(
           }
         ).friendly_name ??
         "Select",
-      supportedModes: buildSupportedModes(displayOptions),
-      currentMode: currentIndex >= 0 ? currentIndex : 0,
+      supportedModes,
+      currentMode:
+        currentIndex >= 0
+          ? (supportedModes[currentIndex]?.mode ?? currentIndex)
+          : (supportedModes[0]?.mode ?? 0),
     },
   });
 }
@@ -809,13 +843,26 @@ export function InputSelectDevice(
     return undefined;
   }
 
+  const mappedOptions = homeAssistantEntity.mapping?.modeSelectOptions;
+  const exposedOptions =
+    mappedOptions?.length &&
+    mappedOptions.every((option) => includesOption(options, option))
+      ? mappedOptions
+      : options;
+  const labels = homeAssistantEntity.mapping?.modeSelectOptions;
+  const displayOptions =
+    labels?.length === exposedOptions.length &&
+    !labels.every((label) => includesOption(exposedOptions, label))
+      ? labels
+      : exposedOptions;
+  const supportedModes = buildSupportedModes(displayOptions);
+
   const currentOption = homeAssistantEntity.entity.state.state;
   const currentIndex = currentOption
-    ? options.findIndex((o) => o.toLowerCase() === currentOption.toLowerCase())
+    ? exposedOptions.findIndex(
+        (o) => o.toLowerCase() === currentOption.toLowerCase(),
+      )
     : 0;
-
-  const labels = homeAssistantEntity.mapping?.modeSelectOptions;
-  const displayOptions = labels?.length === options.length ? labels : options;
 
   return InputSelectEndpointType.set({
     homeAssistantEntity,
@@ -828,8 +875,11 @@ export function InputSelectDevice(
           }
         ).friendly_name ??
         "Input Select",
-      supportedModes: buildSupportedModes(displayOptions),
-      currentMode: currentIndex >= 0 ? currentIndex : 0,
+      supportedModes,
+      currentMode:
+        currentIndex >= 0
+          ? (supportedModes[currentIndex]?.mode ?? currentIndex)
+          : (supportedModes[0]?.mode ?? 0),
     },
   });
 }

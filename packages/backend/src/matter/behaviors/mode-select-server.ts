@@ -21,10 +21,15 @@ export function modeSelectLogTag(
   return "MODE_SELECT";
 }
 
+function modeValueForLabel(label: string, fallback: number) {
+  const match = /^Stufe\s+(\d+)$/i.exec(label.trim());
+  return match ? Number(match[1]) : fallback;
+}
+
 export function buildSupportedModes(options: string[]) {
   return options.map((label, index) => ({
     label: label.length > 64 ? label.substring(0, 64) : label,
-    mode: index,
+    mode: modeValueForLabel(label, index),
     semanticTags: [],
   }));
 }
@@ -79,9 +84,14 @@ class ModeSelectServerBase extends Base {
       ? options.findIndex((o) => o.toLowerCase() === current.toLowerCase())
       : -1;
 
+    const supportedModes = buildSupportedModes(labels);
+
     applyPatchState(this.state, {
-      supportedModes: buildSupportedModes(labels),
-      currentMode: currentIndex >= 0 ? currentIndex : 0,
+      supportedModes,
+      currentMode:
+        currentIndex >= 0
+          ? (supportedModes[currentIndex]?.mode ?? currentIndex)
+          : (supportedModes[0]?.mode ?? 0),
     });
   }
 
@@ -91,16 +101,26 @@ class ModeSelectServerBase extends Base {
     const options = config.getOptions(homeAssistant.entity, this.agent);
     const { newMode } = request;
 
-    if (newMode < 0 || newMode >= options.length) {
+    const configuredLabels = config.getLabels?.(
+      homeAssistant.entity,
+      this.agent,
+    );
+    const labels =
+      configuredLabels?.length === options.length ? configuredLabels : options;
+    const supportedModes = buildSupportedModes(labels);
+    const modeIndex = supportedModes.findIndex((mode) => mode.mode === newMode);
+
+    if (modeIndex < 0 || modeIndex >= options.length) {
       logger.warn(
         `[MATTER][${modeSelectLogTag(homeAssistant.entityId)}] Invalid ChangeToMode request: entity=${homeAssistant.entityId}, mode=${newMode}, options=[${options.join(", ")}]`,
       );
       return;
     }
 
-    const option = options[newMode];
+    const option = options[modeIndex];
+    const oldMode = this.state.currentMode;
     logger.info(
-      `[MATTER][${modeSelectLogTag(homeAssistant.entityId)}] ChangeToMode requested: entity=${homeAssistant.entityId}, mode=${newMode}, option="${option}"`,
+      `[MATTER][${modeSelectLogTag(homeAssistant.entityId)}] ChangeToMode requested: entity=${homeAssistant.entityId}, mode=${newMode}, option="${option}", old CurrentMode: ${oldMode}, new CurrentMode: ${newMode}`,
     );
 
     applyPatchState(this.state, { currentMode: newMode });
