@@ -12,6 +12,7 @@ import {
   OvenDevice,
   TemperatureControlledCabinetDevice,
 } from "@matter/main/devices";
+import { DatatypeModel, FieldElement } from "@matter/main/model";
 import { StatusCode, StatusResponseError } from "@matter/main/types";
 import { applyPatchState } from "../../../../utils/apply-patch-state.js";
 import { BasicInformationServer } from "../../../behaviors/basic-information-server.js";
@@ -20,9 +21,39 @@ import { IdentifyServer } from "../../../behaviors/identify-server.js";
 
 const logger = Logger.get("OvenStageTest");
 
-export class VirtualOvenTemperatureServer extends TemperatureControlServer.with(
-  "TemperatureNumber",
-) {
+// Internal nonvolatile memory, not a vendor cluster or controller capability.
+export class VirtualOvenMemory extends Behavior {
+  static override readonly id = "virtualOvenMemory";
+  static override readonly schema = new DatatypeModel(
+    { name: "VirtualOvenMemoryState", type: "struct" },
+    FieldElement({
+      name: "temperatureSetpoint",
+      type: "int16",
+      quality: "N",
+      default: 2100,
+    }),
+  );
+  declare state: VirtualOvenMemory.State;
+}
+
+export namespace VirtualOvenMemory {
+  export class State {
+    temperatureSetpoint = 2100;
+  }
+}
+
+const VirtualTemperatureBase =
+  TemperatureControlServer.with("TemperatureNumber");
+
+export class VirtualOvenTemperatureServer extends VirtualTemperatureBase {
+  declare state: VirtualOvenTemperatureServer.State;
+  override async initialize() {
+    await super.initialize();
+    const memory = await this.agent.load(VirtualOvenMemory);
+    applyPatchState(this.state, {
+      temperatureSetpoint: memory.state.temperatureSetpoint,
+    });
+  }
   override setTemperature(request: TemperatureControl.SetTemperatureRequest) {
     const target = request.targetTemperature;
     if (
@@ -37,6 +68,15 @@ export class VirtualOvenTemperatureServer extends TemperatureControlServer.with(
       );
     }
     applyPatchState(this.state, { temperatureSetpoint: target });
+    applyPatchState(this.agent.get(VirtualOvenMemory).state, {
+      temperatureSetpoint: target,
+    });
+  }
+}
+
+export namespace VirtualOvenTemperatureServer {
+  export class State extends VirtualTemperatureBase.State {
+    override temperatureSetpoint = 2100;
   }
 }
 
@@ -102,16 +142,13 @@ export function ovenStageCavityType(
   return TemperatureControlledCabinetDevice.with(
     HomeAssistantEntityBehavior,
     IdentifyServer,
+    VirtualOvenMemory,
     VirtualOvenTemperatureServer,
     OvenStageModeServer,
   ).set({
     homeAssistantEntity,
     // Required cabinet temperature control is virtual and disconnected from the real thermostat.
-    temperatureControl: {
-      temperatureSetpoint: 2100,
-      minTemperature: 0,
-      maxTemperature: 5000,
-    },
+    temperatureControl: { minTemperature: 0, maxTemperature: 5000 },
     ovenMode: {
       currentMode: index >= 0 ? index + 1 : 1,
       supportedModes: options.map((label, i) => ({
@@ -123,23 +160,41 @@ export function ovenStageCavityType(
   });
 }
 
-// biome-ignore lint/correctness/noUnusedVariables: namespace merge used by endpoint factory
-class OvenStageComposition extends Behavior {
+export class OvenStageComposition extends Behavior {
   static override readonly id = "ovenStageComposition";
   static override readonly early = true;
   declare state: OvenStageComposition.State;
 
   override async initialize() {
+    const homeAssistant = await this.agent.load(HomeAssistantEntityBehavior);
     // Endpoint.add awaits this parent's construction and would deadlock here.
-    this.endpoint.parts.add(
-      new Endpoint(ovenStageCavityType(this.state.homeAssistantEntity), {
-        id: "oven_cavity",
-      }),
-    );
+    // Behavior initialization can run again on an already populated parent.
+    // Retain the existing child, its endpoint number and its persisted state.
+    if (!this.endpoint.parts.get("oven_cavity")) {
+      this.endpoint.parts.add(
+        new Endpoint(
+          ovenStageCavityType({
+            ...this.state.homeAssistantEntity,
+            entity: homeAssistant.entity,
+          }),
+          { id: "oven_cavity" },
+        ),
+      );
+    }
+    this.reactTo(homeAssistant.onChange, this.updateCavity, {
+      offline: true,
+      lock: true,
+    });
+  }
+
+  private async updateCavity(entity: HomeAssistantEntityInformation) {
+    const cavity = this.endpoint.parts.get("oven_cavity");
+    if (cavity)
+      await cavity.setStateOf(HomeAssistantEntityBehavior, { entity });
   }
 }
 
-namespace OvenStageComposition {
+export namespace OvenStageComposition {
   export class State {
     homeAssistantEntity!: HomeAssistantEntityBehavior.State;
   }

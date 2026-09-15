@@ -12,10 +12,13 @@ import {
   type HomeAssistantAction,
   HomeAssistantActions,
 } from "../../../../services/home-assistant/home-assistant-actions.js";
+import { HomeAssistantEntityBehavior } from "../../../behaviors/home-assistant-entity-behavior.js";
 import { AggregatorEndpoint } from "../../aggregator-endpoint.js";
 import { createLegacyEndpointType } from "../create-legacy-endpoint-type.js";
 import {
+  OvenStageComposition,
   OvenStageModeServer,
+  ovenStageCavityType,
   ovenStageOptions,
   VirtualOvenTemperatureServer,
 } from "./oven-stage-test.js";
@@ -43,11 +46,9 @@ function stage(state = "Stufe 1"): HomeAssistantEntityInformation {
   };
 }
 
-beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "hamh-oven-stage-"));
+function configureEnvironment() {
   env = new Environment("test", Environment.default);
   env.get(VariableService).set("storage.path", dir);
-  calls = [];
   env.set(HomeAssistantActions, {
     call(action: HomeAssistantAction, target: string) {
       calls.push({ action, target });
@@ -72,6 +73,12 @@ beforeEach(() => {
       // biome-ignore lint/suspicious/noExplicitAny: minimal bridge fixture
     } as any),
   );
+}
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), "hamh-oven-stage-"));
+  calls = [];
+  configureEnvironment();
 });
 
 afterEach(async () => {
@@ -108,6 +115,12 @@ it("mounts an Oven with a real Oven Mode cavity and routes stages only to the he
   const cavity = parent.parts.get("oven_cavity");
   expect(cavity).toBeDefined();
   if (!cavity) throw new Error("missing Oven cavity");
+  await parent.act(async (agent) => {
+    await agent.get(OvenStageComposition).initialize();
+    await agent.get(OvenStageComposition).initialize();
+  });
+  expect(parent.parts.get("oven_cavity")).toBe(cavity);
+  expect([...parent.parts]).toHaveLength(1);
   await parent.act((agent) => {
     expect(
       agent
@@ -155,4 +168,78 @@ it("mounts an Oven with a real Oven Mode cavity and routes stages only to the he
       target: stage().entity_id,
     },
   ]);
+});
+
+async function mountOven(preexistingCavity = false) {
+  const type = createLegacyEndpointType(stage("Stufe 2"), {
+    entityId: stage().entity_id,
+    matterDeviceType: "oven_stage_test",
+    customName: "Heizstufe",
+  });
+  if (!type) throw new Error("missing Oven type");
+  server = await ServerNode.create({
+    // biome-ignore lint/suspicious/noExplicitAny: valid runtime Environment
+    environment: env as any,
+    id: "oven-stage-restart",
+    network: { port: 0 },
+    commissioning: { passcode: 20202021, discriminator: 3840 },
+    basicInformation: { vendorId: VendorId(0xfff1), productId: 0x8000 },
+  });
+  const aggregator = new AggregatorEndpoint("aggregator");
+  await server.add(aggregator);
+  const parent = new Endpoint(type, { id: "Heizstufe" });
+  const existing = preexistingCavity
+    ? new Endpoint(ovenStageCavityType({ entity: stage("Stufe 2") }), {
+        id: "oven_cavity",
+      })
+    : undefined;
+  if (existing) parent.parts.add(existing);
+  await aggregator.add(parent);
+  const cavity = parent.parts.get("oven_cavity");
+  if (!cavity) throw new Error("missing Oven cavity");
+  if (existing) expect(cavity).toBe(existing);
+  expect([...parent.parts]).toHaveLength(1);
+  return { parent, cavity };
+}
+
+it("reuses a cavity present before parent initialization", async () => {
+  await mountOven(true);
+});
+
+it("keeps stable endpoint identities and stored cavity state across two restarts", async () => {
+  let mounted = await mountOven();
+  const parentNumber = mounted.parent.number;
+  const cavityNumber = mounted.cavity.number;
+  await mounted.cavity.act((agent) =>
+    agent
+      .get(VirtualOvenTemperatureServer)
+      .setTemperature({ targetTemperature: 2300 }),
+  );
+  for (let restart = 0; restart < 2; restart++) {
+    await server!.close();
+    server = undefined;
+    configureEnvironment();
+    mounted = await mountOven();
+    expect(mounted.parent.number).toBe(parentNumber);
+    expect(mounted.cavity.number).toBe(cavityNumber);
+    await mounted.cavity.act((agent) => {
+      expect(
+        agent.get(VirtualOvenTemperatureServer).state.temperatureSetpoint,
+      ).toBe(2300);
+      expect(agent.get(OvenStageModeServer).state.currentMode).toBe(2);
+    });
+  }
+}, 15000);
+
+it("propagates external HA stage changes to the reused cavity without issuing an action", async () => {
+  const { parent, cavity } = await mountOven(true);
+  for (const mode of [1, 2, 3, 4, 5]) {
+    await parent.setStateOf(HomeAssistantEntityBehavior, {
+      entity: stage(`Stufe ${mode}`),
+    });
+    await cavity.act((agent) =>
+      expect(agent.get(OvenStageModeServer).state.currentMode).toBe(mode),
+    );
+  }
+  expect(calls).toEqual([]);
 });
