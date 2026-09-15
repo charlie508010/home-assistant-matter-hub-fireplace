@@ -2,6 +2,7 @@ import type {
   HomeAssistantEntityInformation,
   WaterHeaterDeviceAttributes,
 } from "@home-assistant-matter-hub/common";
+import { Logger } from "@matter/general";
 import { WaterHeaterModeServer as Base } from "@matter/main/behaviors";
 import { ModeUtils } from "@matter/main/behaviors/mode-base";
 import { ModeBase } from "@matter/main/clusters/mode-base";
@@ -12,6 +13,8 @@ import {
   OFF_MODE,
   type WaterHeaterModeMapping,
 } from "../water-heater-modes.js";
+
+const logger = Logger.get("WaterHeaterModeServer");
 
 /**
  * WaterHeaterMode (0x009E) driven by the water_heater entity's operation modes.
@@ -79,16 +82,36 @@ class WaterHeaterModeServerBase extends Base {
     if (response.status !== ModeBase.ModeChangeStatus.Success) {
       return response;
     }
-    this.state.currentMode = request.newMode;
-
     const homeAssistant = this.agent.get(HomeAssistantEntityBehavior);
     const operationMode = this.state.mapping.haOperationModes[request.newMode];
+    const domain = homeAssistant.entity.entity_id.split(".")[0];
+    if (
+      (domain === "select" || domain === "input_select") &&
+      operationMode == null
+    ) {
+      return {
+        status: ModeBase.ModeChangeStatus.GenericFailure,
+        statusText: "The Home Assistant select has no matching Off option",
+      };
+    }
+    this.state.currentMode = request.newMode;
+
+    logger.info(
+      `[MATTER][HEAT_MODE] ChangeToMode requested: entity=${homeAssistant.entity.entity_id}, mode=${request.newMode}, option="${operationMode ?? "Off"}"`,
+    );
 
     if (operationMode != null) {
-      homeAssistant.callAction({
-        action: "water_heater.set_operation_mode",
-        data: { operation_mode: operationMode },
-      });
+      if (domain === "select" || domain === "input_select") {
+        homeAssistant.callAction({
+          action: `${domain}.select_option`,
+          data: { option: operationMode },
+        });
+      } else {
+        homeAssistant.callAction({
+          action: "water_heater.set_operation_mode",
+          data: { operation_mode: operationMode },
+        });
+      }
     } else if (request.newMode === OFF_MODE) {
       homeAssistant.callAction({ action: "water_heater.turn_off", data: {} });
     } else {

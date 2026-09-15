@@ -127,6 +127,25 @@ async function bringUp(entity: HomeAssistantEntityInformation) {
   return endpoint;
 }
 
+function heatingStage(
+  state: string,
+  options: string[],
+): HomeAssistantEntityInformation {
+  const entityId = "input_select.kamin_matter_heizstufe_test";
+  return {
+    entity_id: entityId,
+    state: {
+      entity_id: entityId,
+      state,
+      attributes: { friendly_name: "Heizstufe", options },
+      context: { id: "c" },
+      last_changed: "2026-01-01T00:00:00",
+      last_updated: "2026-01-01T00:00:00",
+      // biome-ignore lint/suspicious/noExplicitAny: test fixture
+    } as any,
+  };
+}
+
 interface Snapshot {
   deviceTypes: number[];
   acceptedCommands: number[];
@@ -190,6 +209,44 @@ const FULL_HEATER = {
 };
 
 describe("Matter 1.4 water heater bring-up", () => {
+  it("maps a five-stage input_select onto standard Water Heater Mode", async () => {
+    const labels = ["Stufe 1", "Stufe 2", "Stufe 3", "Stufe 4", "Stufe 5"];
+    const endpoint = await bringUp(heatingStage("Stufe 2", ["Off", ...labels]));
+    const state = await snapshot(endpoint);
+
+    expect(state.deviceTypes).toContain(WATER_HEATER);
+    expect(state.supportedModes.map((mode) => mode.label)).toEqual([
+      "Off",
+      ...labels,
+    ]);
+    expect(state.supportedModes[0].tags).toEqual([OFF_TAG]);
+    expect(state.supportedModes[1].tags).toEqual([MANUAL_TAG]);
+    expect(
+      state.supportedModes.filter((mode) => mode.tags.includes(MANUAL_TAG)),
+    ).toHaveLength(1);
+    expect(state.currentMode).toBe(9);
+
+    calls.length = 0;
+    await endpoint.act((agent) => {
+      // biome-ignore lint/suspicious/noExplicitAny: invoke the cluster command
+      (agent as any).waterHeaterMode.changeToMode({ newMode: 11 });
+    });
+    expect(calls).toContainEqual({
+      action: "input_select.select_option",
+      data: { option: "Stufe 4" },
+    });
+
+    calls.length = 0;
+    await endpoint.act((agent) => {
+      // biome-ignore lint/suspicious/noExplicitAny: invoke the cluster command
+      (agent as any).waterHeaterMode.changeToMode({ newMode: OFF_MODE });
+    });
+    expect(calls).toContainEqual({
+      action: "input_select.select_option",
+      data: { option: "Off" },
+    });
+  });
+
   it("mounts as WaterHeater (0x050F) with Boost and CancelBoost", async () => {
     const endpoint = await bringUp(waterHeater("eco", FULL_HEATER));
     const state = await snapshot(endpoint);

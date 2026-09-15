@@ -163,10 +163,15 @@ export function buildModeMapping(
     },
   ];
 
-  const manualOperationMode = preferred(MANUAL_PREFERENCE, heatingModes);
+  // A custom select profile (for example Stufe 1..5) has no standard HA water
+  // heater operation names. Its first non-off option is the manual/setpoint
+  // mode; the remaining custom options may use the unrestricted Auto tag.
+  const manualOperationMode =
+    preferred(MANUAL_PREFERENCE, heatingModes) ?? heatingModes[0];
   const manualMode =
     manualOperationMode != null
-      ? KNOWN_MODE_VALUES[normalizeOperationMode(manualOperationMode)]
+      ? (KNOWN_MODE_VALUES[normalizeOperationMode(manualOperationMode)] ??
+        UNKNOWN_MODE_BASE)
       : SYNTHETIC_MANUAL_MODE;
 
   if (manualOperationMode == null) {
@@ -220,7 +225,7 @@ export function currentMode(
   if (isOffMode(entityState)) {
     return OFF_MODE;
   }
-  const operationMode = attributes.operation_mode;
+  const operationMode = attributes.operation_mode ?? entityState;
   if (operationMode == null) {
     return mapping.manualMode;
   }

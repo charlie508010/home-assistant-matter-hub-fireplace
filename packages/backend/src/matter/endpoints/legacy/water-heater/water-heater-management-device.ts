@@ -32,7 +32,26 @@ export function WaterHeaterManagementDevice(
   homeAssistantEntity: HomeAssistantEntityBehavior.State,
 ): EndpointType {
   const entityState = homeAssistantEntity.entity.state;
-  const attributes = entityState.attributes as WaterHeaterDeviceAttributes;
+  const rawAttributes =
+    entityState.attributes as WaterHeaterDeviceAttributes & {
+      options?: unknown;
+    };
+  const domain = homeAssistantEntity.entity.entity_id.split(".")[0];
+  const isSelectStage = domain === "select" || domain === "input_select";
+  const entityOptions = Array.isArray(rawAttributes.options)
+    ? rawAttributes.options.filter(
+        (option): option is string =>
+          typeof option === "string" && option.length > 0,
+      )
+    : [];
+  const configuredOptions = homeAssistantEntity.mapping?.modeSelectOptions;
+  const stageOptions =
+    configuredOptions?.length === entityOptions.length
+      ? configuredOptions
+      : entityOptions;
+  const attributes: WaterHeaterDeviceAttributes = isSelectStage
+    ? { ...rawAttributes, operation_list: stageOptions }
+    : rawAttributes;
 
   const modeMapping = buildModeMapping(attributes);
   const initialMode = currentMode(modeMapping, entityState.state, attributes);
