@@ -170,6 +170,47 @@ describe("SelectDevice / InputSelectDevice ModeSelect labels (#296)", () => {
     });
   });
 
+  it("keeps heating and flame as independent five-stage Mode Select devices", () => {
+    const labels = ["Stufe 1", "Stufe 2", "Stufe 3", "Stufe 4", "Stufe 5"];
+    const heating = createEntity(
+      "input_select.kamin_matter_heizstufe_test",
+      "Stufe 2",
+      { friendly_name: "Heizstufe", options: labels },
+    );
+    const flame = createEntity("select.kamin_matter_flamme_test", "Stufe 4", {
+      friendly_name: "Flamme",
+      options: labels,
+    });
+
+    const heatingType = InputSelectDevice({
+      entity: heating,
+      customName: "Heizstufe",
+      mapping: {
+        entityId: heating.entity_id,
+        matterDeviceType: "mode_select",
+        modeSelectOptions: labels,
+      },
+    } as never);
+    const flameType = SelectDevice({
+      entity: flame,
+      customName: "Flamme",
+      mapping: {
+        entityId: flame.entity_id,
+        matterDeviceType: "mode_select",
+        modeSelectOptions: labels,
+      },
+    } as never);
+
+    const heatMode = readSupportedModes(heatingType!);
+    const flameMode = readSupportedModes(flameType!);
+    expect(heatMode.description).toBe("Heizstufe");
+    expect(flameMode.description).toBe("Flamme");
+    expect(heatMode.supportedModes.map((mode) => mode.label)).toEqual(labels);
+    expect(flameMode.supportedModes.map((mode) => mode.label)).toEqual(labels);
+    expect(heatMode.currentMode).toBe(1);
+    expect(flameMode.currentMode).toBe(3);
+  });
+
   it("returns undefined when options are missing", () => {
     const entity = createEntity("input_select.empty", "unknown", {});
     expect(InputSelectDevice({ entity } as never)).toBeUndefined();

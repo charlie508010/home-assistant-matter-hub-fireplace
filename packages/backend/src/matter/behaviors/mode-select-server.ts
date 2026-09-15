@@ -8,6 +8,19 @@ import { HomeAssistantEntityBehavior } from "./home-assistant-entity-behavior.js
 
 const logger = Logger.get("ModeSelectServer");
 
+export function modeSelectLogTag(
+  entityId: string,
+): "HEAT_MODE" | "FLAME_MODE" | "MODE_SELECT" {
+  const normalized = entityId.toLowerCase();
+  if (normalized.includes("heiz") || normalized.includes("heat")) {
+    return "HEAT_MODE";
+  }
+  if (normalized.includes("flamm")) {
+    return "FLAME_MODE";
+  }
+  return "MODE_SELECT";
+}
+
 export function buildSupportedModes(options: string[]) {
   return options.map((label, index) => ({
     label: label.length > 64 ? label.substring(0, 64) : label,
@@ -80,14 +93,14 @@ class ModeSelectServerBase extends Base {
 
     if (newMode < 0 || newMode >= options.length) {
       logger.warn(
-        `[${homeAssistant.entityId}] Invalid mode ${newMode}, options: [${options.join(", ")}]`,
+        `[MATTER][${modeSelectLogTag(homeAssistant.entityId)}] Invalid ChangeToMode request: entity=${homeAssistant.entityId}, mode=${newMode}, options=[${options.join(", ")}]`,
       );
       return;
     }
 
     const option = options[newMode];
     logger.info(
-      `[${homeAssistant.entityId}] changeToMode(${newMode}) -> "${option}"`,
+      `[MATTER][${modeSelectLogTag(homeAssistant.entityId)}] ChangeToMode requested: entity=${homeAssistant.entityId}, mode=${newMode}, option="${option}"`,
     );
 
     applyPatchState(this.state, { currentMode: newMode });
