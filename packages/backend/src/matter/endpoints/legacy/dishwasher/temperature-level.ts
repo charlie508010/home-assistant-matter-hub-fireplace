@@ -1,10 +1,13 @@
 import type { HomeAssistantEntityInformation } from "@home-assistant-matter-hub/common";
 import type { EndpointType } from "@matter/main";
 import { TemperatureControlServer } from "@matter/main/behaviors";
+import { DishwasherAlarmServer } from "@matter/main/behaviors/dishwasher-alarm";
+import { DishwasherAlarm } from "@matter/main/clusters/dishwasher-alarm";
 import type { TemperatureControl } from "@matter/main/clusters/temperature-control";
 import { StatusCode, StatusResponseError } from "@matter/main/types";
 import { applyPatchState } from "../../../../utils/apply-patch-state.js";
 import { HomeAssistantEntityBehavior } from "../../../behaviors/home-assistant-entity-behavior.js";
+import { buildSelectDishwasherModeServer } from "../select/index.js";
 import { DishwasherEndpoint } from "./index.js";
 
 const STAGES = [
@@ -99,6 +102,17 @@ export function DishwasherTemperatureLevelDevice(
     with(...behaviors: unknown[]): EndpointType;
   };
   return dishwasher.with(
+    buildSelectDishwasherModeServer(
+      domain === "select"
+        ? "select.select_option"
+        : "input_select.select_option",
+      homeAssistantEntity,
+    ),
+    DishwasherAlarmServer.set({
+      mask: new DishwasherAlarm.Alarm(0),
+      state: new DishwasherAlarm.Alarm(0),
+      supported: new DishwasherAlarm.Alarm(0),
+    }),
     SelectTemperatureLevelServer.set({
       supportedTemperatureLevels,
       selectedTemperatureLevel:

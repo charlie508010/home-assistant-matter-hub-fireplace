@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { HomeAssistantEntityInformation } from "@home-assistant-matter-hub/common";
 import { Environment, VariableService } from "@matter/general";
 import { Endpoint, VendorId } from "@matter/main";
+import { DishwasherAlarm, DishwasherMode } from "@matter/main/clusters";
 import { ServerNode } from "@matter/main/node";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { BridgeDataProvider } from "../../../../services/bridges/bridge-data-provider.js";
@@ -117,6 +118,12 @@ it("exposes six Temperature Control levels and rejects out-of-range commands", a
       agent.descriptor.state.deviceTypeList.map((d) => Number(d.deviceType)),
     ).toContain(0x75);
     expect(agent.descriptor.state.serverList.map(Number)).toContain(0x56);
+    expect(agent.descriptor.state.serverList.map(Number)).toContain(
+      Number(DishwasherMode.id),
+    );
+    expect(agent.descriptor.state.serverList.map(Number)).toContain(
+      Number(DishwasherAlarm.id),
+    );
 
     for (const level of [-1, 6, 8, 2.5]) {
       expect(() =>

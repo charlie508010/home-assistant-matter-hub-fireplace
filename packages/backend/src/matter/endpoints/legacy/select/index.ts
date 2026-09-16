@@ -329,7 +329,7 @@ namespace SelectDishwasherModeServerBase {
   }
 }
 
-function buildSelectDishwasherModeServer(
+export function buildSelectDishwasherModeServer(
   action: SelectAction,
   homeAssistantEntity: HomeAssistantEntityBehavior.State,
 ) {
