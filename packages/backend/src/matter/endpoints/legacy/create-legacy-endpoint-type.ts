@@ -28,6 +28,7 @@ import { ButtonDevice } from "./button/index.js";
 import { ClimateDevice } from "./climate/index.js";
 import { CoverDevice } from "./cover/index.js";
 import { DishwasherEndpoint } from "./dishwasher/index.js";
+import { DishwasherTemperatureLevelDevice } from "./dishwasher/temperature-level.js";
 import { DoorbellDevice } from "./event/doorbell.js";
 import { EventDevice } from "./event/index.js";
 import { FanDevice } from "./fan/index.js";
@@ -325,6 +326,7 @@ const matterDeviceTypeFactories: Partial<
     return SwitchDevice(ha);
   },
   dishwasher: DishwasherEndpoint,
+  dishwasher_temperature_level: DishwasherTemperatureLevelDevice,
   dimmable_plugin_unit: (ha) =>
     DimmablePlugInUnitType.set({ homeAssistantEntity: ha }),
   // Expose as On/Off Light (0x0100, an OnOff server) so controllers show a

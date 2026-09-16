@@ -4,6 +4,7 @@ export type MatterDeviceType =
   | "air_purifier"
   | "air_quality_sensor"
   | "dishwasher"
+  | "dishwasher_temperature_level"
   | "laundry_washer"
   | "oven_stage_test"
   | "basic_video_player"
@@ -577,6 +578,7 @@ export const matterDeviceTypeLabels: Record<MatterDeviceType, string> = {
   color_temperature_light: "Color Temperature Light",
   contact_sensor: "Contact Sensor",
   dishwasher: "Dishwasher",
+  dishwasher_temperature_level: "Dishwasher Temperature Level (0–5 test)",
   laundry_washer: "Laundry Washer",
   oven_stage_test: "Oven Mode stage test (virtual cavity)",
   dimmable_light: "Dimmable Light",
@@ -731,6 +733,13 @@ export const matterDeviceTypeControllerSupport: Record<
     alexa: "unknown",
     aqara: "unknown",
     note: "Appliance types have little controller support today.",
+  },
+  dishwasher_temperature_level: {
+    apple: "unknown",
+    google: "unknown",
+    alexa: "unknown",
+    aqara: "unknown",
+    note: "Experimental Dishwasher Temperature Control level 0–5. Alexa RangeController support must be tested.",
   },
   laundry_washer: {
     apple: "no",
@@ -1020,7 +1029,7 @@ export const domainToDefaultMatterTypes: Partial<
     "temperature_sensor",
     "tvoc_sensor",
   ],
-  select: ["mode_select", "laundry_washer"],
+  select: ["mode_select", "laundry_washer", "dishwasher_temperature_level"],
   siren: ["on_off_plugin_unit"],
   switch: [
     "dishwasher",
