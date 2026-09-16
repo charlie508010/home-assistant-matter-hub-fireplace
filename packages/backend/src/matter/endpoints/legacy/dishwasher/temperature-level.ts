@@ -18,6 +18,7 @@ const STAGES = [
   "Stufe 4",
   "Stufe 5",
 ] as const;
+const EXPOSED_STAGES: string[] = STAGES.slice(1);
 
 function stageOptions(entity: HomeAssistantEntityInformation): string[] {
   const options = (entity.state.attributes as { options?: unknown }).options;
@@ -47,7 +48,8 @@ export class SelectTemperatureLevelServer extends TemperatureLevelBase {
   }
 
   private update(entity: HomeAssistantEntityInformation) {
-    const stage = stageOptions(entity).indexOf(entity.state.state);
+    stageOptions(entity);
+    const stage = EXPOSED_STAGES.indexOf(entity.state.state);
     if (stage >= 0) {
       applyPatchState(this.state, { selectedTemperatureLevel: stage });
     }
@@ -63,14 +65,15 @@ export class SelectTemperatureLevelServer extends TemperatureLevelBase {
       level >= this.state.supportedTemperatureLevels.length
     ) {
       throw new StatusResponseError(
-        "Temperature level must be between 0 and 5",
+        "Temperature level must be between 0 and 4",
         StatusCode.ConstraintError,
       );
     }
 
     const homeAssistant = this.agent.get(HomeAssistantEntityBehavior);
     homeAssistant.assertAvailable();
-    const option = stageOptions(homeAssistant.entity)[level];
+    stageOptions(homeAssistant.entity);
+    const option = EXPOSED_STAGES[level];
     const domain = homeAssistant.entityId.split(".")[0];
     homeAssistant.callAction({
       action: `${domain}.select_option`,
@@ -89,13 +92,9 @@ export function DishwasherTemperatureLevelDevice(
       "Dishwasher Temperature Level requires select or input_select",
     );
   }
-  const options = stageOptions(homeAssistantEntity.entity);
-  const labels = homeAssistantEntity.mapping?.modeSelectOptions;
-  const supportedTemperatureLevels =
-    labels?.length === options.length && new Set(labels).size === labels.length
-      ? labels
-      : options;
-  const selectedTemperatureLevel = options.indexOf(
+  stageOptions(homeAssistantEntity.entity);
+  const supportedTemperatureLevels = EXPOSED_STAGES;
+  const selectedTemperatureLevel = EXPOSED_STAGES.indexOf(
     homeAssistantEntity.entity.state.state,
   );
   const dishwasher = DishwasherEndpoint(homeAssistantEntity) as EndpointType & {
@@ -107,6 +106,8 @@ export function DishwasherTemperatureLevelDevice(
         ? "select.select_option"
         : "input_select.select_option",
       homeAssistantEntity,
+      EXPOSED_STAGES,
+      1,
     ),
     DishwasherAlarmServer.set({
       mask: new DishwasherAlarm.Alarm(0),

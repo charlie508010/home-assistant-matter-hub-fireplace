@@ -267,8 +267,13 @@ function buildSelectLampModeDevice(
   });
 }
 
-function dishwasherModes(state: HomeAssistantEntityState, agent: Agent) {
-  const labels = getDisplayOptions(state, agent);
+function dishwasherModes(
+  state: HomeAssistantEntityState,
+  agent: Agent,
+  optionSubset?: string[],
+  modeIdOffset = 0,
+) {
+  const labels = optionSubset ?? getDisplayOptions(state, agent);
   const tags = [
     DishwasherMode.ModeTag.Normal,
     DishwasherMode.ModeTag.Light,
@@ -277,15 +282,14 @@ function dishwasherModes(state: HomeAssistantEntityState, agent: Agent) {
     DishwasherMode.ModeTag.Heavy,
     DishwasherMode.ModeTag.Max,
   ];
-  return labels.map((label, mode) => ({
+  return labels.map((label, index) => ({
     label,
-    mode,
-    modeTags: [{ value: tags[mode] ?? DishwasherMode.ModeTag.Normal }],
+    mode: index + modeIdOffset,
+    modeTags: [{ value: tags[index] ?? DishwasherMode.ModeTag.Normal }],
   }));
 }
 
-// biome-ignore lint/correctness/noUnusedVariables: Used by the factory below
-class SelectDishwasherModeServerBase extends BaseDishwasherModeServer {
+export class SelectDishwasherModeServerBase extends BaseDishwasherModeServer {
   declare state: SelectDishwasherModeServerBase.State;
 
   override async initialize() {
@@ -299,22 +303,38 @@ class SelectDishwasherModeServerBase extends BaseDishwasherModeServer {
   }
 
   private update(entity: HomeAssistantEntityInformation) {
-    const options = getSelectOptions(entity);
+    const options = this.state.optionSubset ?? getSelectOptions(entity);
     if (options.length === 0) return;
     const currentMode = options.findIndex(
       (option) => option.toLowerCase() === entity.state.state?.toLowerCase(),
     );
     applyPatchState(this.state, {
-      supportedModes: dishwasherModes(entity.state, this.agent),
-      currentMode: currentMode >= 0 ? currentMode : 0,
+      supportedModes: dishwasherModes(
+        entity.state,
+        this.agent,
+        this.state.optionSubset,
+        this.state.modeIdOffset,
+      ),
+      currentMode:
+        (currentMode >= 0 ? currentMode : 0) + (this.state.modeIdOffset ?? 0),
     });
   }
 
   override async changeToMode(request: ModeBase.ChangeToModeRequest) {
+    const modeIndex = this.state.supportedModes.findIndex(
+      (mode) => mode.mode === request.newMode,
+    );
+    if (modeIndex < 0) {
+      return {
+        status: ModeBase.ModeChangeStatus.UnsupportedMode,
+        statusText: "Unsupported stage",
+      };
+    }
     const result = await super.changeToMode(request);
     if (result.status === ModeBase.ModeChangeStatus.Success) {
       const homeAssistant = this.agent.get(HomeAssistantEntityBehavior);
-      const option = getSelectOptions(homeAssistant.entity)[request.newMode];
+      const option = (this.state.optionSubset ??
+        getSelectOptions(homeAssistant.entity))[modeIndex];
       if (option !== undefined) {
         homeAssistant.callAction(selectOptionAction(this.state.action, option));
       }
@@ -323,28 +343,35 @@ class SelectDishwasherModeServerBase extends BaseDishwasherModeServer {
   }
 }
 
-namespace SelectDishwasherModeServerBase {
+export namespace SelectDishwasherModeServerBase {
   export class State extends BaseDishwasherModeServer.State {
     action!: SelectAction;
+    optionSubset?: string[];
+    modeIdOffset?: number;
   }
 }
 
 export function buildSelectDishwasherModeServer(
   action: SelectAction,
   homeAssistantEntity: HomeAssistantEntityBehavior.State,
+  optionSubset?: string[],
+  modeIdOffset = 0,
 ) {
   const state = homeAssistantEntity.entity.state;
-  const options = getStateOptions(state);
+  const options = optionSubset ?? getStateOptions(state);
   const currentMode = options.findIndex(
     (option) => option.toLowerCase() === state.state?.toLowerCase(),
   );
   const labels = homeAssistantEntity.mapping?.modeSelectOptions;
-  const displayOptions = labels?.length === options.length ? labels : options;
+  const displayOptions =
+    optionSubset ?? (labels?.length === options.length ? labels : options);
   return SelectDishwasherModeServerBase.set({
     action,
-    supportedModes: displayOptions.map((label, mode) => ({
+    optionSubset,
+    modeIdOffset,
+    supportedModes: displayOptions.map((label, index) => ({
       label,
-      mode,
+      mode: index + modeIdOffset,
       modeTags: [
         {
           value:
@@ -355,11 +382,11 @@ export function buildSelectDishwasherModeServer(
               DishwasherMode.ModeTag.LowEnergy,
               DishwasherMode.ModeTag.Heavy,
               DishwasherMode.ModeTag.Max,
-            ][mode] ?? DishwasherMode.ModeTag.Normal,
+            ][index] ?? DishwasherMode.ModeTag.Normal,
         },
       ],
     })),
-    currentMode: currentMode >= 0 ? currentMode : 0,
+    currentMode: (currentMode >= 0 ? currentMode : 0) + modeIdOffset,
   });
 }
 
