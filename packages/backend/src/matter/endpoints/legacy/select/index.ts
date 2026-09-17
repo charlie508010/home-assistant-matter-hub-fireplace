@@ -272,8 +272,10 @@ function dishwasherModes(
   agent: Agent,
   optionSubset?: string[],
   modeIdOffset = 0,
+  displayLabels?: string[],
 ) {
-  const labels = optionSubset ?? getDisplayOptions(state, agent);
+  const labels =
+    displayLabels ?? optionSubset ?? getDisplayOptions(state, agent);
   const tags = [
     DishwasherMode.ModeTag.Normal,
     DishwasherMode.ModeTag.Light,
@@ -314,6 +316,7 @@ export class SelectDishwasherModeServerBase extends BaseDishwasherModeServer {
         this.agent,
         this.state.optionSubset,
         this.state.modeIdOffset,
+        this.state.displayLabels,
       ),
       currentMode:
         (currentMode >= 0 ? currentMode : 0) + (this.state.modeIdOffset ?? 0),
@@ -348,6 +351,7 @@ export namespace SelectDishwasherModeServerBase {
     action!: SelectAction;
     optionSubset?: string[];
     modeIdOffset?: number;
+    displayLabels?: string[];
   }
 }
 
@@ -356,6 +360,7 @@ export function buildSelectDishwasherModeServer(
   homeAssistantEntity: HomeAssistantEntityBehavior.State,
   optionSubset?: string[],
   modeIdOffset = 0,
+  displayLabels?: string[],
 ) {
   const state = homeAssistantEntity.entity.state;
   const options = optionSubset ?? getStateOptions(state);
@@ -364,11 +369,14 @@ export function buildSelectDishwasherModeServer(
   );
   const labels = homeAssistantEntity.mapping?.modeSelectOptions;
   const displayOptions =
-    optionSubset ?? (labels?.length === options.length ? labels : options);
+    displayLabels ??
+    optionSubset ??
+    (labels?.length === options.length ? labels : options);
   return SelectDishwasherModeServerBase.set({
     action,
     optionSubset,
     modeIdOffset,
+    displayLabels,
     supportedModes: displayOptions.map((label, index) => ({
       label,
       mode: index + modeIdOffset,
