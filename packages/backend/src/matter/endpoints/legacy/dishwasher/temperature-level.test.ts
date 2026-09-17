@@ -192,3 +192,53 @@ it("offers only Stufe 1–5 as dishwasher modes and rejects invalid mode IDs", a
     },
   ]);
 });
+
+it("exposes only dishwasher modes 1–5 for the real flame color and rejects 0 and 6+", async () => {
+  const real = entity();
+  real.entity_id = "select.kamin_flammenfarbe";
+  real.state.entity_id = real.entity_id;
+  const type = createLegacyEndpointType(real, {
+    entityId: real.entity_id,
+    matterDeviceType: "dishwasher_stage_mode_only",
+    customName: "Flammenfarbe",
+  });
+  expect(type).toBeDefined();
+  server = await ServerNode.create({
+    environment: env as never,
+    id: "flame-stage-mode-test",
+    network: { port: 0 },
+    commissioning: { passcode: 20202021, discriminator: 3840 },
+    basicInformation: { vendorId: VendorId(0xfff1), productId: 0x8000 },
+  });
+  const aggregator = new AggregatorEndpoint("aggregator");
+  await server.add(aggregator);
+  const endpoint = new Endpoint(type!, { id: "flammenfarbe" });
+  await aggregator.add(endpoint);
+
+  await endpoint.act(async (agent) => {
+    const mode = agent.get(SelectDishwasherModeServerBase);
+    expect(mode.state.supportedModes.map((entry) => entry.mode)).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
+    expect(mode.state.supportedModes.map((entry) => entry.label)).toEqual(
+      OPTIONS.slice(1),
+    );
+    expect(agent.descriptor.state.serverList.map(Number)).not.toContain(0x56);
+    for (const invalidMode of [0, 6, 8]) {
+      const result = await mode.changeToMode({ newMode: invalidMode });
+      expect(result.status).toBe(ModeBase.ModeChangeStatus.UnsupportedMode);
+    }
+    expect(calls).toHaveLength(0);
+    const result = await mode.changeToMode({ newMode: 5 });
+    expect(result.status).toBe(ModeBase.ModeChangeStatus.Success);
+  });
+  expect(calls).toEqual([
+    {
+      target: "select.kamin_flammenfarbe",
+      action: {
+        action: "select.select_option",
+        data: { option: "Stufe 5" },
+      },
+    },
+  ]);
+});

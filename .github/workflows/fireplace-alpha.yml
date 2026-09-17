@@ -42,13 +42,13 @@ jobs:
         run: pnpm run test
 
       - name: Set Fireplace Alpha version
-        run: pnpm run release:version 2.1.0-alpha.919
+        run: pnpm run release:version 2.1.0-alpha.920
 
       - name: Build
         run: pnpm run build
         env:
           BASE_URL: /home-assistant-matter-hub
-          APP_VERSION: 2.1.0-alpha.919
+          APP_VERSION: 2.1.0-alpha.920
 
       - name: Package
         run: pnpm run release:pack
@@ -72,9 +72,9 @@ jobs:
           file: apps/home-assistant-matter-hub/addon.Dockerfile
           build-args: |
             NODE_VERSION=22
-            PACKAGE_VERSION=2.1.0-alpha.919
+            PACKAGE_VERSION=2.1.0-alpha.920
           tags: |
-            ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:2.1.0-alpha.919-${{ matrix.arch }}
+            ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:2.1.0-alpha.920-${{ matrix.arch }}
             ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:fireplace-alpha-${{ matrix.arch }}
 
   publish-manifest:
@@ -98,10 +98,10 @@ jobs:
       - name: Publish manifests
         run: |
           docker buildx imagetools create \
-            --tag ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:2.1.0-alpha.919 \
+            --tag ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:2.1.0-alpha.920 \
             --tag ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:fireplace-alpha \
-            ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:2.1.0-alpha.919-amd64 \
-            ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:2.1.0-alpha.919-arm64
+            ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:2.1.0-alpha.920-amd64 \
+            ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:2.1.0-alpha.920-arm64
 
       - name: Verify manifest
-        run: docker buildx imagetools inspect ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:2.1.0-alpha.919
+        run: docker buildx imagetools inspect ghcr.io/charlie508010/home-assistant-matter-hub-fireplace-addon:2.1.0-alpha.920

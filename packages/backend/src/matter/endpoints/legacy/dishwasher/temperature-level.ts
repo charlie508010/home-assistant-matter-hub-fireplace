@@ -121,3 +121,33 @@ export function DishwasherTemperatureLevelDevice(
     }),
   );
 }
+
+// Keep voice stage numbers unambiguous: Temperature Control would expose a
+// second, zero-based range for the same physical setting.
+export function DishwasherStageModeOnlyDevice(
+  homeAssistantEntity: HomeAssistantEntityBehavior.State,
+): EndpointType {
+  const domain = homeAssistantEntity.entity.entity_id.split(".")[0];
+  if (domain !== "select" && domain !== "input_select") {
+    throw new Error("Dishwasher Stage Mode requires select or input_select");
+  }
+  stageOptions(homeAssistantEntity.entity);
+  const dishwasher = DishwasherEndpoint(homeAssistantEntity) as EndpointType & {
+    with(...behaviors: unknown[]): EndpointType;
+  };
+  return dishwasher.with(
+    buildSelectDishwasherModeServer(
+      domain === "select"
+        ? "select.select_option"
+        : "input_select.select_option",
+      homeAssistantEntity,
+      EXPOSED_STAGES,
+      1,
+    ),
+    DishwasherAlarmServer.set({
+      mask: new DishwasherAlarm.Alarm(0),
+      state: new DishwasherAlarm.Alarm(0),
+      supported: new DishwasherAlarm.Alarm(0),
+    }),
+  );
+}
