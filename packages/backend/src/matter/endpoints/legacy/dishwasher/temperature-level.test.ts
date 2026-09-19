@@ -220,13 +220,9 @@ it("exposes only dishwasher modes 1–5 for the real flame color and rejects 0 a
     expect(mode.state.supportedModes.map((entry) => entry.mode)).toEqual([
       1, 2, 3, 4, 5,
     ]);
-    expect(mode.state.supportedModes.map((entry) => entry.label)).toEqual([
-      "Minimum",
-      "Niedrig",
-      "Mittel",
-      "Hoch",
-      "Maximum",
-    ]);
+    expect(mode.state.supportedModes.map((entry) => entry.label)).toEqual(
+      OPTIONS.slice(1),
+    );
     expect(agent.descriptor.state.serverList.map(Number)).not.toContain(0x56);
     for (const invalidMode of [0, 6, 8]) {
       const result = await mode.changeToMode({ newMode: invalidMode });
