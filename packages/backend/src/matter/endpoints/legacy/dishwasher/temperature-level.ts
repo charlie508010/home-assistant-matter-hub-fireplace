@@ -19,6 +19,13 @@ const STAGES = [
   "Stufe 5",
 ] as const;
 const EXPOSED_STAGES: string[] = STAGES.slice(1);
+const SPOKEN_STAGE_LABELS = [
+  "Stufe Eins",
+  "Stufe Zwei",
+  "Stufe Drei",
+  "Stufe Vier",
+  "Stufe Fünf",
+];
 
 function stageOptions(entity: HomeAssistantEntityInformation): string[] {
   const options = (entity.state.attributes as { options?: unknown }).options;
@@ -143,6 +150,7 @@ export function DishwasherStageModeOnlyDevice(
       homeAssistantEntity,
       EXPOSED_STAGES,
       1,
+      SPOKEN_STAGE_LABELS,
     ),
     DishwasherAlarmServer.set({
       mask: new DishwasherAlarm.Alarm(0),
