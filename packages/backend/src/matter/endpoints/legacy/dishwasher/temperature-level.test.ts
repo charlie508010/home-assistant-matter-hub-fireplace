@@ -221,11 +221,11 @@ it("exposes only dishwasher modes 1–5 for the real flame color and rejects 0 a
       1, 2, 3, 4, 5,
     ]);
     expect(mode.state.supportedModes.map((entry) => entry.label)).toEqual([
-      "Stufe Eins",
-      "Stufe Zwei",
-      "Stufe Drei",
-      "Stufe Vier",
-      "Stufe Fünf",
+      "Eins",
+      "Zwei",
+      "Drei",
+      "Vier",
+      "Fünf",
     ]);
     expect(agent.descriptor.state.serverList.map(Number)).not.toContain(0x56);
     for (const invalidMode of [0, 6, 8]) {
