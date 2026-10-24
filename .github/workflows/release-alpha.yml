@@ -27,7 +27,7 @@ jobs:
       release-version: ${{ steps.version.outputs.release-version }}
       release-channel: alpha
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -133,7 +133,7 @@ jobs:
             CHANGELOG_FULL.md
 
       - name: Package Artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: package.tgz
           path: apps/home-assistant-matter-hub/package.tgz
@@ -144,7 +144,7 @@ jobs:
     outputs:
       dockerfiles: ${{ steps.dockerfiles.outputs.dockerfiles }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Find Dockerfiles
         id: dockerfiles
         uses: ./.github/actions/find-dockerfiles
@@ -160,7 +160,7 @@ jobs:
       matrix:
         dockerfile: ${{ fromJSON(needs.prepare-docker.outputs.dockerfiles) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Docker
         uses: ./.github/actions/setup-docker
@@ -173,7 +173,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Package Artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: package.tgz
           path: apps/home-assistant-matter-hub/
@@ -195,13 +195,13 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Environment
         uses: ./.github/actions/setup-node
 
       - name: Download Package
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: package.tgz
           path: apps/home-assistant-matter-hub/
