@@ -13,7 +13,7 @@ jobs:
     outputs:
       node-version: ${{ steps.setup.outputs.node-version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -32,7 +32,7 @@ jobs:
         run: pnpm run build
 
       - name: Package Artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: package.tgz
           path: apps/home-assistant-matter-hub/package.tgz
@@ -43,7 +43,7 @@ jobs:
     outputs:
       dockerfiles: ${{ steps.dockerfiles.outputs.dockerfiles }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Find Dockerfiles
         id: dockerfiles
         uses: ./.github/actions/find-dockerfiles
@@ -56,13 +56,13 @@ jobs:
       matrix:
         dockerfile: ${{ fromJSON(needs.prepare-docker.outputs.dockerfiles) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Docker
         uses: ./.github/actions/setup-docker
 
       - name: Package Artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: package.tgz
           path: apps/home-assistant-matter-hub/
